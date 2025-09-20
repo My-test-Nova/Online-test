@@ -35,6 +35,10 @@ class OnlinePlayState extends MusicBeatState
 	public static var SONG:SwagSong = null;
 
 	public var generatedMusic:Bool = false;
+	
+	var vocals:FlxSound;
+    var opponentVocals:FlxSound;
+    var inst:FlxSound;
 
 	private var curSong:String = "";
 
@@ -47,7 +51,6 @@ class OnlinePlayState extends MusicBeatState
 
 	// 网络连接相关
 	public var room:Room<Dynamic>;
-	public var isConnect:Bool = false;
 	public var ConnectNum:Int = 0;
 
 	public function new()
@@ -55,6 +58,8 @@ class OnlinePlayState extends MusicBeatState
 		super();
 		
 		SONG = Song.loadFromJson("dad-battle-hard","dad-battle");
+		generateSong(SONG.song);
+		connectRoom();
 	}
 	
     function connectRoom(){
@@ -67,7 +72,6 @@ class OnlinePlayState extends MusicBeatState
         trace('正在连接 $ConnectNum');
         
         var client = new Client("wss://online.novaflare.top:2345");
-        isConnect = true;
         
         client.joinOrCreate("my_room", [], MyRoomState, function(err, roomResult) {
             if (err != null) {
@@ -77,7 +81,6 @@ class OnlinePlayState extends MusicBeatState
                 
                 trace('断开房间,尝试重连');
                 connectRoom();
-                isConnect = true;
                 return;
             }
             
@@ -85,7 +88,6 @@ class OnlinePlayState extends MusicBeatState
             trace("成功加入房间");
             
             ConnectNum = 0;
-            isConnect = false;
             
             room.onMessage("__playground_message_types", function(message) {
                 //trace("收到服务器消息类型: " + message);
@@ -108,13 +110,13 @@ class OnlinePlayState extends MusicBeatState
             });
             
             room.onMessage("start_game", function(message) {
-                generateSong(SONG.song);
+                trace("start song");
+                startSong();
             });
             
             room.onLeave += () -> {
                 trace('断开房间,尝试重连');
                 connectRoom();
-                isConnect = true;
                 return;
             };
         });
@@ -123,17 +125,15 @@ class OnlinePlayState extends MusicBeatState
 	override public function create()
 	{
 		super.create();
-		connectRoom();
 		
-		// 添加手机控件
 		addMobileControls(false);
+		mobileControls.visible = true;
 		
-		// 添加键盘事件监听
 		FlxG.stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
 		FlxG.stage.addEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
 		
 		// Gameplay settings
-		songSpeed = PlayState.SONG.speed;
+		songSpeed = SONG.speed;
 		songSpeedType = "multiplicative";
 		
 		notes = new FlxTypedGroup<Note>();
@@ -148,13 +148,32 @@ class OnlinePlayState extends MusicBeatState
 		generateStaticArrows(0);
 		generateStaticArrows(1);
 	}
+	
+	function startSong():Void
+    {
+        inst.play();
+        if (SONG.needsVoices) {
+            vocals.play();
+            opponentVocals.play();
+        }
+        
+        FlxG.sound.music = inst;
+        
+        vocals.volume = 1;
+        opponentVocals.volume = 1;
+        inst.volume = 1;
+    }
 
 	override public function destroy()
-	{
-		super.destroy();
-		FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
-		FlxG.stage.removeEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
-	}
+    {
+        if (vocals != null) vocals.destroy();
+        if (opponentVocals != null) opponentVocals.destroy();
+        if (inst != null) inst.destroy();
+        
+        super.destroy();
+        FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
+        FlxG.stage.removeEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
+    }
 
 	public function onKeyPress(event:KeyboardEvent):Void
 	{
@@ -224,25 +243,9 @@ class OnlinePlayState extends MusicBeatState
 		noteKillOffset = Math.max(Conductor.stepCrochet, 350 / songSpeed);
 		return value;
 	}
-
-	// 按键按下处理
-	public function keyPressed(key:Int):Void
+	
+	private function keyReleased(key:Int)
 	{
-		if (key < 0 || key > 3) return;
-		
-		var spr:StrumNote = playerStrums.members[key];
-		if (spr != null && spr.animation.curAnim.name != 'confirm')
-		{
-			spr.playAnim('pressed');
-			spr.resetAnim = 0;
-		}
-	}
-
-	// 按键释放处理
-	public function keyReleased(key:Int):Void
-	{
-		if (key < 0 || key > 3) return;
-		
 		var spr:StrumNote = playerStrums.members[key];
 		if (spr != null)
 		{
@@ -251,9 +254,63 @@ class OnlinePlayState extends MusicBeatState
 		}
 	}
 
+	private function keyPressed(key:Int)
+	{
+		if (key < 0)
+			return;
+
+		// more accurate hit time for the ratings?
+		var lastTime:Float = Conductor.songPosition;
+		if (Conductor.songPosition >= 0)
+			Conductor.songPosition = FlxG.sound.music.time;
+
+		// obtain notes that the player can hit
+		var plrInputNotes:Array<Note> = notes.members.filter(function(n:Note) return n != null && n.canBeHit && n.mustPress && !n.tooLate && !n.wasGoodHit
+			&& !n.blockHit && !n.isSustainNote && n.noteData == key);
+
+		plrInputNotes.sort(PlayState.sortHitNotes);
+
+		var shouldMiss:Bool = !ClientPrefs.data.ghostTapping;
+
+		if (plrInputNotes.length != 0)
+		{ // slightly faster than doing `> 0` lol
+			var funnyNote:Note = plrInputNotes[0]; // front note
+			// trace('✡⚐🕆☼ 💣⚐💣');
+
+			if (plrInputNotes.length > 1)
+			{
+				var doubleNote:Note = plrInputNotes[1];
+
+				if (doubleNote.noteData == funnyNote.noteData)
+				{
+					// if the note has a 0ms distance (is on top of the current note), kill it
+					if (Math.abs(doubleNote.strumTime - funnyNote.strumTime) < 1.0)
+						invalidateNote(doubleNote);
+					else if (doubleNote.strumTime < funnyNote.strumTime)
+					{
+						// replace the note if its ahead of time (or at least ensure "doubleNote" is ahead)
+						funnyNote = doubleNote;
+					}
+				}
+			}
+
+			goodNoteHit(funnyNote);
+		}
+
+		// more accurate hit time for the ratings? part 2 (Now that the calculations are done, go back to the time it was before for not causing a note stutter)
+		Conductor.songPosition = lastTime;
+
+		var spr:StrumNote = playerStrums.members[key];
+		if (spr != null && spr.animation.curAnim.name != 'confirm')
+		{
+			spr.playAnim('pressed');
+			spr.resetAnim = 0;
+		}
+	}
+
 	private function generateSong(dataPath:String):Void
 	{
-		songSpeed = PlayState.SONG.speed;
+		songSpeed = SONG.speed;
 		songSpeedType = "multiplicative";
 
 		var songData = SONG;
@@ -328,6 +385,24 @@ class OnlinePlayState extends MusicBeatState
 
 		unspawnNotes.sort(sortByTime);
 		generatedMusic = true;
+		
+        if (SONG.needsVoices) {
+            vocals = new FlxSound().loadEmbedded(Paths.voices(SONG.song));
+            opponentVocals = new FlxSound().loadEmbedded(Paths.voices(SONG.song, "Opponent"));
+        } else {
+            vocals = new FlxSound();
+            opponentVocals = new FlxSound();
+        }
+        
+        FlxG.sound.list.add(vocals);
+        FlxG.sound.list.add(opponentVocals);
+        
+        inst = new FlxSound().loadEmbedded(Paths.inst(SONG.song));
+        FlxG.sound.list.add(inst);
+        
+        vocals.volume = 0;
+        opponentVocals.volume = 0;
+        inst.volume = 0;
 	}
 
 	public static function sortByTime(Obj1:Dynamic, Obj2:Dynamic):Int
@@ -360,6 +435,9 @@ class OnlinePlayState extends MusicBeatState
 
 	override public function update(elapsed:Float)
 	{
+	    if (inst != null && inst.playing)
+            Conductor.songPosition = inst.time;
+    
 		super.update(elapsed);
 
 		if (unspawnNotes[0] != null)
