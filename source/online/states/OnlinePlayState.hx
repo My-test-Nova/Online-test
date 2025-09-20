@@ -15,6 +15,10 @@ import haxe.Json;
 import objects.Character;
 import openfl.utils.Assets as OpenFlAssets;
 
+import io.colyseus.Client;
+import io.colyseus.Room;
+
+
 class OnlinePlayState extends MusicBeatState
 {
 	// Borrowed from original PlayState
