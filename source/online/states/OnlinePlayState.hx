@@ -51,6 +51,10 @@ class OnlinePlayState extends MusicBeatState
 	public var gameStarted:Bool = false; // 等待服务器消息才开始游戏
 	
 	public var camHUD:FlxCamera;
+	
+	public static var STRUM_X = 48.5;
+	public static var STRUM_X_MIDDLESCROLL = -278;
+
 
 	public function new()
 	{
