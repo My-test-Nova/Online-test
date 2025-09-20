@@ -125,6 +125,7 @@
 	<haxelib name="flxanimate" unless="html5"/>
 	<haxelib name="tjson"/>
 	<haxelib name="json2object"/>
+	<haxelib name="colyseus"/>
 
     <haxelib name="funkin.vis"/>
 	<haxelib name="grig.audio" />
