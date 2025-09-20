@@ -19,8 +19,7 @@ import flixel.FlxCamera;
 import flixel.system.FlxSound;
 import flixel.util.FlxTimer;
 
-import objects.KeybindShowcase;
-import utils.StrumBoundaries;
+import objects.StrumNote.StrumBoundaries;
 
 import backend.Section.SwagSection;
 import backend.Song.SwagSong;
@@ -325,21 +324,6 @@ class OnlinePlayState extends MusicBeatState
     	
     	adaptStrumline(opponentStrums);
     	adaptStrumline(playerStrums);
-    
-    	if (ClientPrefs.data.showKeybinds)
-    	{
-    		for (i in 0...playerStrums.members.length)
-    		{
-    			var keyShowcase = new KeybindShowcase(playerStrums.members[i].x,
-    				ClientPrefs.data.downScroll ? playerStrums.members[i].y - 30 : playerStrums.members[i].y + playerStrums.members[i].height + 5,
-    				ClientPrefs.keyBinds.get(keysArray[i]), FlxG.camera, playerStrums.members[i].width / 2, SONG.mania);
-    			keyShowcase.onComplete = function()
-    			{
-    				remove(keyShowcase);
-    			}
-    			add(keyShowcase);
-    		}
-    	}
     }
     
     public function adaptStrumline(strumline:FlxTypedGroup<StrumNote>)
