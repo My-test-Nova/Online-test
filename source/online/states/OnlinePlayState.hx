@@ -1,25 +1,18 @@
 package online.states;
 
+import objects.StrumNote;
+import backend.Song;
+import backend.Section;
+import flixel.FlxBasic;
 import flixel.FlxG;
 import flixel.FlxState;
-import flixel.group.FlxGroup.FlxTypedGroup;
+import flixel.group.FlxGroup;
 import flixel.util.FlxSort;
 import objects.Note;
-import objects.StrumNote;
-import objects.NoteSplash;
-import backend.Song;
-import backend.Conductor;
-import flixel.input.keyboard.FlxKey;
+import flixel.input.touch.FlxTouch;
+import flixel.math.FlxPoint;
 import openfl.events.KeyboardEvent;
-import flixel.util.FlxDestroyUtil;
-import flixel.tweens.FlxTween;
-import flixel.FlxSprite;
-import flixel.FlxBasic;
-import flixel.FlxCamera;
-import flixel.system.FlxSound;
-import flixel.util.FlxTimer;
-
-import objects.StrumNote.StrumBoundaries;
+import flixel.input.keyboard.FlxKey;
 
 import backend.Section.SwagSection;
 import backend.Song.SwagSong;
@@ -29,51 +22,39 @@ import io.colyseus.Room;
 
 class OnlinePlayState extends MusicBeatState
 {
-	public var notes:FlxTypedGroup<Note>;
-	public var unspawnNotes:Array<Note> = [];
-	public var strumLineNotes:FlxTypedGroup<StrumNote>;
-	public var opponentStrums:FlxTypedGroup<StrumNote>;
-	public var playerStrums:FlxTypedGroup<StrumNote>;
-	
-	public static var SONG:SwagSong;
-	public var generatedMusic:Bool = false;
-	public var endingSong:Bool = false;
-	public var startingSong:Bool = false;
-	
-	public var inst:FlxSound;
-	public var vocals:FlxSound;
-	
-	private var keysArray:Array<String>;
-	
-	static var room:Room<Dynamic>;
-    static var isConnect:Bool = false;
-    static var ConnectNum:Int = 0;
-	
-	public var paused:Bool = false;
-	public var canPause:Bool = true;
-	public var gameStarted:Bool = false; // 等待服务器消息才开始游戏
-	
 	public static var STRUM_X = 48.5;
 	public static var STRUM_X_MIDDLESCROLL = -278;
 
-	public var grpNoteSplashes:FlxTypedGroup<NoteSplash>;
-	public var noteGroup:FlxTypedGroup<FlxBasic>;
-	
-	// 添加摄像机
-	public var camHUD:FlxCamera;
-	public var camGame:FlxCamera;
-	public var camOther:FlxCamera;
-	
-	// 添加其他必要变量
-	public var songSpeed:Float = 1;
+	public var notes:FlxTypedGroup<Note>;
+	public var unspawnNotes:Array<Note> = [];
+
+	public var strumLineNotes:FlxTypedGroup<StrumNote>;
+	public var opponentStrums:FlxTypedGroup<StrumNote>;
+	public var playerStrums:FlxTypedGroup<StrumNote>;
+
+	public static var SONG:SwagSong = null;
+
+	public var generatedMusic:Bool = false;
+
+	private var curSong:String = "";
+
+	public var songSpeed(default, set):Float = 1;
+	public var songSpeedType:String = "multiplicative";
 	public var noteKillOffset:Float = 350;
+
+	// 键盘控制相关
+	public var keysArray:Array<String> = ['note_left', 'note_down', 'note_up', 'note_right'];
+
+	// 网络连接相关
+	public var room:Room<Dynamic>;
+	public var isConnect:Bool = false;
+	public var ConnectNum:Int = 0;
 
 	public function new()
 	{
 		super();
 		
 		SONG = Song.loadFromJson("dad-battle-hard","dad-battle");
-		connectRoom();
 	}
 	
     function connectRoom(){
@@ -127,7 +108,7 @@ class OnlinePlayState extends MusicBeatState
             });
             
             room.onMessage("start_game", function(message) {
-                startGame();
+                generateSong(SONG.song);
             });
             
             room.onLeave += () -> {
@@ -142,99 +123,157 @@ class OnlinePlayState extends MusicBeatState
 	override public function create()
 	{
 		super.create();
+		connectRoom();
 		
-		camGame = initPsychCamera();
-		camHUD = new FlxCamera();
-		camOther = new FlxCamera();
+		// 添加手机控件
+		addMobileControls(false);
 		
-		camHUD.bgColor.alpha = 0;
-		camOther.bgColor.alpha = 0;
-		
-		FlxG.cameras.add(camHUD, false);
-		FlxG.cameras.add(camOther, false);
-		
-		keysArray = [];
-		for (i in 0...SONG.mania + 1)
-		{
-			keysArray.push(SONG.mania + '_key_$i');
-		}
-
-		if (FlxG.sound.music != null)
-			FlxG.sound.music.stop();
-
-		generatedMusic = false;
-	
-		noteGroup = new FlxTypedGroup<FlxBasic>();
-		add(noteGroup);
-		noteGroup.cameras = [camHUD];
-		
-		grpNoteSplashes = new FlxTypedGroup<NoteSplash>();
-		noteGroup.add(grpNoteSplashes);
-		
-		strumLineNotes = new FlxTypedGroup<StrumNote>();
-		noteGroup.add(strumLineNotes);
-		
-		opponentStrums = new FlxTypedGroup<StrumNote>();
-		playerStrums = new FlxTypedGroup<StrumNote>();
-		
-		notes = new FlxTypedGroup<Note>();
-		noteGroup.add(notes);
-        
-		generateSong(SONG.song);
-		
+		// 添加键盘事件监听
 		FlxG.stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
 		FlxG.stage.addEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
 		
-		paused = true;
-		canPause = false;
+		// Gameplay settings
+		songSpeed = PlayState.SONG.speed;
+		songSpeedType = "multiplicative";
 		
-		addMobileControls(false);
-	}
-	
-	public function startGame():Void
-	{
-		trace("收到服务器开始游戏消息");
-		gameStarted = true;
-		paused = false;
-		canPause = true;
-		startSong();
-	}
-	
-	function generateSong(dataPath:String):Void
-	{
-		Conductor.bpm = SONG.bpm;
+		notes = new FlxTypedGroup<Note>();
+		add(notes);
 		
-		inst = new FlxSound();
-		try
-		{
-			inst.loadEmbedded(Paths.inst(SONG.song));
-		}
-		catch (e:Dynamic) {}
-		FlxG.sound.list.add(inst);
-		
-		vocals = new FlxSound();
-		try
-		{
-			if (SONG.needsVoices)
-				vocals.loadEmbedded(Paths.voices(SONG.song));
-		}
-		catch (e:Dynamic) {}
-		FlxG.sound.list.add(vocals);
+		strumLineNotes = new FlxTypedGroup<StrumNote>();
+		add(strumLineNotes);
+
+		opponentStrums = new FlxTypedGroup<StrumNote>();
+		playerStrums = new FlxTypedGroup<StrumNote>();
 		
 		generateStaticArrows(0);
 		generateStaticArrows(1);
+	}
+
+	override public function destroy()
+	{
+		super.destroy();
+		FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
+		FlxG.stage.removeEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
+	}
+
+	public function onKeyPress(event:KeyboardEvent):Void
+	{
+		var eventKey = event.keyCode;
+		var key:Int = getKeyFromEvent(keysArray, eventKey);
+
+		if (key > -1)
+		{
+			// 发送按键按下消息到服务器
+			if (room != null)
+			{
+			    try {
+			        room.send("notePressed", key);
+			    }
+			}
+			keyPressed(key);
+		}
+	}
+
+	public function onKeyRelease(event:KeyboardEvent):Void
+	{
+		var eventKey = event.keyCode;
+		var key:Int = getKeyFromEvent(keysArray, eventKey);
+
+		if (key > -1)
+		{
+			// 发送按键释放消息到服务器
+			if (room != null)
+			{
+				try {
+			        room.send("noteReleased", key);
+			    }
+			}
+			keyReleased(key);
+		}
+	}
+
+	public static function getKeyFromEvent(arr:Array<String>, key:FlxKey):Int
+	{
+		if (key != NONE)
+		{
+			for (i in 0...arr.length)
+			{
+				var note:Array<FlxKey> = Controls.instance.keyboardBinds[arr[i]];
+				for (noteKey in note)
+					if (key == noteKey)
+						return i;
+			}
+		}
+		return -1;
+	}
+
+	function set_songSpeed(value:Float):Float
+	{
+		if (generatedMusic)
+		{
+			var ratio:Float = value / songSpeed;
+			if (ratio != 1)
+			{
+				for (note in notes.members)
+					note.resizeByRatio(ratio);
+				for (note in unspawnNotes)
+					note.resizeByRatio(ratio);
+			}
+		}
+		songSpeed = value;
+		noteKillOffset = Math.max(Conductor.stepCrochet, 350 / songSpeed);
+		return value;
+	}
+
+	// 按键按下处理
+	public function keyPressed(key:Int):Void
+	{
+		if (key < 0 || key > 3) return;
 		
-		var noteData:Array<SwagSection> = SONG.notes;
+		var spr:StrumNote = playerStrums.members[key];
+		if (spr != null && spr.animation.curAnim.name != 'confirm')
+		{
+			spr.playAnim('pressed');
+			spr.resetAnim = 0;
+		}
+	}
+
+	// 按键释放处理
+	public function keyReleased(key:Int):Void
+	{
+		if (key < 0 || key > 3) return;
 		
+		var spr:StrumNote = playerStrums.members[key];
+		if (spr != null)
+		{
+			spr.playAnim('static');
+			spr.resetAnim = 0;
+		}
+	}
+
+	private function generateSong(dataPath:String):Void
+	{
+		songSpeed = PlayState.SONG.speed;
+		songSpeedType = "multiplicative";
+
+		var songData = SONG;
+		Conductor.bpm = songData.bpm;
+
+		curSong = songData.song;
+
+		Note.init();
+
+		var noteData:Array<SwagSection> = songData.notes;
+
 		for (section in noteData)
 		{
 			for (songNotes in section.sectionNotes)
 			{
 				var daStrumTime:Float = songNotes[0];
-				var daNoteData:Int = Std.int(songNotes[1] % (SONG.mania + 1));
+				var daNoteData:Int = Std.int(songNotes[1] % 4);
 				var gottaHitNote:Bool = section.mustHitSection;
 
-				if (songNotes[1] > SONG.mania)
+				if (songNotes[1] > 3)
 					gottaHitNote = !section.mustHitSection;
 
 				var oldNote:Note;
@@ -246,7 +285,8 @@ class OnlinePlayState extends MusicBeatState
 				var swagNote:Note = new Note(daStrumTime, daNoteData, oldNote);
 				swagNote.mustPress = gottaHitNote;
 				swagNote.sustainLength = songNotes[2];
-				swagNote.noteType = songNotes[3];
+				swagNote.noteType = songNotes[3] != null ? songNotes[3] : "";
+
 				swagNote.scrollFactor.set();
 
 				unspawnNotes.push(swagNote);
@@ -268,295 +308,94 @@ class OnlinePlayState extends MusicBeatState
 						unspawnNotes.push(sustainNote);
 						swagNote.tail.push(sustainNote);
 
-						if (sustainNote.mustPress)
-							sustainNote.x += FlxG.width / 2;
+						if (!PlayState.isPixelStage)
+						{
+							if (oldNote.isSustainNote)
+							{
+								oldNote.scale.y *= Note.SUSTAIN_SIZE / oldNote.frameHeight;
+								oldNote.updateHitbox();
+							}
+						}
 					}
 				}
 
 				if (swagNote.mustPress)
 					swagNote.x += FlxG.width / 2;
+				else if (ClientPrefs.data.middleScroll)
+					swagNote.x += 310;
 			}
 		}
-		
+
 		unspawnNotes.sort(sortByTime);
 		generatedMusic = true;
 	}
-	
+
 	public static function sortByTime(Obj1:Dynamic, Obj2:Dynamic):Int
 		return FlxSort.byValues(FlxSort.ASCENDING, Obj1.strumTime, Obj2.strumTime);
-	
+
 	private function generateStaticArrows(player:Int):Void
-    {
-    	var strumLineX:Float = ClientPrefs.data.middleScroll ? STRUM_X_MIDDLESCROLL : STRUM_X;
-    	var strumLineY:Float = ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50;
-    	
-    	for (i in 0...SONG.mania + 1)
-    	{
-    		var targetAlpha:Float = 1;
-    		if (player < 1)
-    		{
-    			if (!ClientPrefs.data.opponentStrums)
-    				targetAlpha = 0;
-    			else if (ClientPrefs.data.middleScroll)
-    				targetAlpha = 0.35;
-    		}
-    
-    		var babyArrow:StrumNote = new StrumNote(strumLineX, strumLineY, i, player);
-    		babyArrow.downScroll = ClientPrefs.data.downScroll;
-    		babyArrow.alpha = targetAlpha;
-    
-    		if (player == 1)
-    			playerStrums.add(babyArrow);
-    		else
-    		{
-    			if (ClientPrefs.data.middleScroll)
-    			{
-    				babyArrow.x += 310;
-    				if (i > 1) // Up and Right
-    					babyArrow.x += FlxG.width / 2 + 25;
-    			}
-    			opponentStrums.add(babyArrow);
-    		}
-    
-    		strumLineNotes.add(babyArrow);
-    		babyArrow.postAddedToGroup();
-    	}
-    	
-    	adaptStrumline(opponentStrums);
-    	adaptStrumline(playerStrums);
-    }
-    
-    public function adaptStrumline(strumline:FlxTypedGroup<StrumNote>)
-    {
-    	var strumLineWidth:Float = 0;
-    	var strumLineIsBig:Bool = false;
-    
-    	for (note in strumline.members)
-    		strumLineWidth += note.width;
-    	strumLineIsBig = strumLineWidth > StrumBoundaries.getBoundaryWidth().x;
-    
-    	while (strumLineIsBig)
-    	{
-    		strumLineWidth = 0;
-    		for (note in strumline.members)
-    		{
-    			note.retryBound();
-    			strumLineWidth += note.width;
-    		}
-    		trace('Strumline is too big! Shrinking and retrying.');
-    		strumLineIsBig = strumLineWidth > StrumBoundaries.getBoundaryWidth().x;
-    	}
-    }
-	
+	{
+		var strumLineX:Float = ClientPrefs.data.middleScroll ? STRUM_X_MIDDLESCROLL : STRUM_X;
+		var strumLineY:Float = ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50;
+		
+		for (i in 0...4)
+		{
+			var targetAlpha:Float = 1;
+			if (player == 0 && ClientPrefs.data.middleScroll)
+				targetAlpha = 0.35;
+
+			var babyArrow:StrumNote = new StrumNote(strumLineX, strumLineY, i, player);
+			babyArrow.downScroll = ClientPrefs.data.downScroll;
+			babyArrow.alpha = targetAlpha;
+
+			if (player == 1)
+				playerStrums.add(babyArrow);
+			else
+				opponentStrums.add(babyArrow);
+
+			strumLineNotes.add(babyArrow);
+			babyArrow.postAddedToGroup();
+		}
+	}
+
 	override public function update(elapsed:Float)
 	{
 		super.update(elapsed);
-		
-		if (gameStarted && !paused)
-		{
-			Conductor.songPosition += elapsed * 1000;
-			
-			if (generatedMusic)
-			{
-				if (unspawnNotes[0] != null)
-                {
-                    var time:Float = 2000;
-                    if (songSpeed < 1)
-                        time /= songSpeed;
-                        
-                    noteKillOffset = Math.max(Conductor.stepCrochet, 350 / songSpeed);
-                    
-                    while (unspawnNotes.length > 0 && unspawnNotes[0].strumTime - Conductor.songPosition < time)
-                    {
-                        var dunceNote:Note = unspawnNotes[0];
-                        notes.insert(0, dunceNote);
-                        dunceNote.spawned = true;
 
-                        dunceNote.visible = true;
-                        dunceNote.active = true;
-                
-                        var index:Int = unspawnNotes.indexOf(dunceNote);
-                        unspawnNotes.splice(index, 1);
-                    }
-                }
-				
+		if (unspawnNotes[0] != null)
+		{
+			var time:Float = 2000;
+			if (songSpeed < 1)
+				time /= songSpeed;
+
+			while (unspawnNotes.length > 0 && unspawnNotes[0].strumTime - Conductor.songPosition < time)
+			{
+				var dunceNote:Note = unspawnNotes[0];
+				notes.insert(0, dunceNote);
+				dunceNote.spawned = true;
+
+				var index:Int = unspawnNotes.indexOf(dunceNote);
+				unspawnNotes.splice(index, 1);
+			}
+		}
+
+		if (generatedMusic)
+		{
+			if (notes.length > 0)
+			{
 				notes.forEachAlive(function(daNote:Note)
-                {
-                    daNote.visible = true;
-                    daNote.active = true;
-                    
-                    var strumGroup:FlxTypedGroup<StrumNote> = playerStrums;
-                    if (!daNote.mustPress)
-                        strumGroup = opponentStrums;
-                
-                    var strum:StrumNote = strumGroup.members[daNote.noteData];
-                    daNote.followStrumNote(strum, (60 / SONG.bpm) * 1000, songSpeed);
-                
-                    if (daNote.mustPress)
-                    {
-                        if (daNote.canBeHit && daNote.strumTime <= Conductor.songPosition)
-                            goodNoteHit(daNote);
-                    }
-                    else
-                    {
-                        if (daNote.strumTime <= Conductor.songPosition)
-                            opponentNoteHit(daNote);
-                    }
-                
-                    if (Conductor.songPosition > daNote.strumTime + noteKillOffset)
-                    {
-                        if (daNote.mustPress && !daNote.wasGoodHit)
-                            noteMiss(daNote);
-                            
-                        daNote.active = false;
-                        daNote.visible = false;
-                        
-                        if (daNote.tooLate || daNote.wasGoodHit)
-                        {
-                            notes.remove(daNote, true);
-                            daNote.destroy();
-                        }
-                    }
-                });
-			}
-			
-			if (startingSong && Conductor.songPosition >= 0)
-				startSong();
-			else if (!startingSong)
-				Conductor.songPosition = -Conductor.crochet * 5;
-		}
-	}
-	
-	function startSong():Void
-	{
-		startingSong = false;
-		inst.play();
-		vocals.play();
-	}
-	
-	public function onKeyPress(event:KeyboardEvent):Void
-	{
-		if (!gameStarted || paused) return;
-		
-		var eventKey = event.keyCode;
-		var key:Int = getKeyFromEvent(keysArray, eventKey);
-		
-		if (key > -1) {
-			keyPressed(key);
-			room.send('notePressed', key);
-		}
-	}
-	
-	private function keyPressed(key:Int)
-    {
-        var spr:StrumNote = playerStrums.members[key];
-        if (spr != null)
-        {
-            spr.playAnim('confirm');
-            spr.resetAnim = 0;
-        }
-    
-        if (generatedMusic)
-        {
-            var plrInputNotes:Array<Note> = notes.members.filter(function(n:Note):Bool
-            {
-                return n != null && n.canBeHit && n.mustPress && !n.tooLate && !n.wasGoodHit && !n.isSustainNote && n.noteData == key;
-            });
-            plrInputNotes.sort(sortHitNotes);
-    
-            if (plrInputNotes.length != 0)
-            {
-                var funnyNote:Note = plrInputNotes[0];
-                goodNoteHit(funnyNote);
-            }
-        }
-    }
-	
-	public static function sortHitNotes(a:Note, b:Note):Int
-		return FlxSort.byValues(FlxSort.ASCENDING, a.strumTime, b.strumTime);
-	
-	public static function getKeyFromEvent(arr:Array<String>, key:FlxKey):Int
-	{
-		if (key != NONE)
-		{
-			for (i in 0...arr.length)
-			{
-				var note:Array<FlxKey> = Controls.instance.keyboardBinds[arr[i]];
-				for (noteKey in note)
-					if (key == noteKey)
-						return i;
-			}
-		}
-		return -1;
-	}
-	
-	public function onKeyRelease(event:KeyboardEvent):Void
-	{
-		// 只有在游戏开始且未暂停时才处理按键释放
-		if (!gameStarted || paused) return;
-		
-		var eventKey:FlxKey = event.keyCode;
-		var key:Int = getKeyFromEvent(keysArray, eventKey);
-		
-		if (key > -1) {
-			keyReleased(key);
-			room.send('noteReleased', key);
-		}
-	}
-	
-	public function keyReleased(key:Int)
-	{
-		var spr:StrumNote = playerStrums.members[key];
-		if (spr != null)
-		{
-			spr.playAnim('static');
-			spr.resetAnim = 0;
-		}
-	}
-	
-	public function goodNoteHit(note:Note):Void
-	{
-		if (!note.wasGoodHit)
-		{
-			note.wasGoodHit = true;
-			vocals.volume = 1;
+				{
+					var strumGroup:FlxTypedGroup<StrumNote> = playerStrums;
+					if (!daNote.mustPress)
+						strumGroup = opponentStrums;
 
-			if (!note.isSustainNote)
-			{
-				notes.remove(note, true);
-				note.destroy();
-			}
-		}
-	}
-	
-	public function opponentNoteHit(note:Note):Void
-	{
-		if (!note.wasGoodHit)
-		{
-			note.wasGoodHit = true;
-			vocals.volume = 1;
+					var strum:StrumNote = strumGroup.members[daNote.noteData];
+					daNote.followStrumNote(strum, (60 / SONG.bpm) * 1000, songSpeed);
 
-			if (!note.isSustainNote)
-			{
-				notes.remove(note, true);
-				note.destroy();
+					if (Conductor.songPosition - daNote.strumTime > noteKillOffset)
+						daNote.kill();
+				});
 			}
 		}
-	}
-	
-	public function noteMiss(note:Note):Void
-	{
-		if (!note.isSustainNote)
-		{
-			notes.remove(note, true);
-			note.destroy();
-		}
-	}
-	
-	override function destroy()
-	{
-		FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
-		FlxG.stage.removeEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
-		super.destroy();
 	}
 }
