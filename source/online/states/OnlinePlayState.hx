@@ -446,9 +446,6 @@ class OnlinePlayState extends MusicBeatState
 				swagNote.sustainLength = songNotes[2];
 				// swagNote.gfNote = (section.gfSection && (songNotes[1]<4));
 				swagNote.noteType = songNotes[3];
-				if (!Std.isOfType(songNotes[3], String))
-					swagNote.noteType = ChartingState.noteTypeList[songNotes[3]]; // Backward compatibility + compatibility with Week 7 charts
-
 				swagNote.scrollFactor.set();
 
 				unspawnNotes.push(swagNote);
@@ -624,7 +621,7 @@ class OnlinePlayState extends MusicBeatState
 			finishTimer.cancel();
 			finishTimer.destroy();
 		}
-		close();
+		MusicBeatState.switchState(new states.MainMenuState());
 	}
 
 	private function cachePopUpScore()
