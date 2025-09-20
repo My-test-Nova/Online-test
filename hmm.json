@@ -135,6 +135,11 @@
       "url": "https://github.com/EsotericSoftware/spine-runtimes/"
     },
     {
+      "name": "colyseus",
+      "type": "haxelib",
+      "version": "0.15.2"
+    },
+    {
       "name": "flxanimate",
       "type": "git",
       "dir": null,
