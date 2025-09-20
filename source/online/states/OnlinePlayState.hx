@@ -50,19 +50,24 @@ class OnlinePlayState extends MusicBeatState
 	public var canPause:Bool = true;
 	public var gameStarted:Bool = false; // 等待服务器消息才开始游戏
 	
-	public var camHUD:FlxCamera;
-	
 	public static var STRUM_X = 48.5;
 	public static var STRUM_X_MIDDLESCROLL = -278;
 
+	public var grpNoteSplashes:FlxTypedGroup<NoteSplash>;
+	public var noteGroup:FlxTypedGroup<FlxBasic>;
+	
+	// 添加摄像机
+	public var camHUD:FlxCamera;
+	public var camGame:FlxCamera;
+	public var camOther:FlxCamera;
+	
+	// 添加其他必要变量
+	public var songSpeed:Float = 1;
+	public var noteKillOffset:Float = 350;
 
 	public function new()
 	{
 		super();
-		
-		camHUD = new FlxCamera();
-		camHUD.bgColor.alpha = 0;
-		FlxG.cameras.add(camHUD, false);
 		
 		SONG = Song.loadFromJson("dad-battle");
 		connectRoom();
@@ -135,6 +140,16 @@ class OnlinePlayState extends MusicBeatState
 	{
 		super.create();
 		
+		camGame = initPsychCamera();
+		camHUD = new FlxCamera();
+		camOther = new FlxCamera();
+		
+		camHUD.bgColor.alpha = 0;
+		camOther.bgColor.alpha = 0;
+		
+		FlxG.cameras.add(camHUD, false);
+		FlxG.cameras.add(camOther, false);
+		
 		keysArray = [];
 		for (i in 0...SONG.mania + 1)
 		{
@@ -145,18 +160,22 @@ class OnlinePlayState extends MusicBeatState
 			FlxG.sound.music.stop();
 
 		generatedMusic = false;
+	
+		noteGroup = new FlxTypedGroup<FlxBasic>();
+		add(noteGroup);
+		noteGroup.cameras = [camHUD];
 		
-		notes = new FlxTypedGroup<Note>();
-		add(notes);
+		grpNoteSplashes = new FlxTypedGroup<NoteSplash>();
+		noteGroup.add(grpNoteSplashes);
 		
 		strumLineNotes = new FlxTypedGroup<StrumNote>();
-		add(strumLineNotes);
+		noteGroup.add(strumLineNotes);
 		
 		opponentStrums = new FlxTypedGroup<StrumNote>();
 		playerStrums = new FlxTypedGroup<StrumNote>();
 		
-		add(opponentStrums);
-        add(playerStrums);
+		notes = new FlxTypedGroup<Note>();
+		noteGroup.add(notes);
         
 		generateSong(SONG.song);
 		
@@ -273,41 +292,42 @@ class OnlinePlayState extends MusicBeatState
     		var babyArrow:StrumNote = new StrumNote(strumLineX, strumLineY, i, player);
     		babyArrow.downScroll = ClientPrefs.data.downScroll;
     		
-    		// 设置初始透明度
     		var targetAlpha:Float = 1;
-    		if (player == 0) { // 对手箭头
-    			if (!ClientPrefs.data.opponentStrums) targetAlpha = 0;
-    			else if (ClientPrefs.data.middleScroll) targetAlpha = 0.35;
+    		if (player == 0)
+    		{
+    			if (!ClientPrefs.data.opponentStrums)
+    				targetAlpha = 0;
+    			else if (ClientPrefs.data.middleScroll)
+    				targetAlpha = 0.35;
     		}
     		babyArrow.alpha = targetAlpha;
     
     		if (player == 1)
     		{
     			playerStrums.add(babyArrow);
-    			// 中间滚动调整
     			if (ClientPrefs.data.middleScroll)
     			{
     				babyArrow.x += 310;
-    				if (i > 1) babyArrow.x += FlxG.width / 2 + 25;
+    				if (i > 1) // Up and Right
+    					babyArrow.x += FlxG.width / 2 + 25;
     			}
     		}
     		else
     		{
     			opponentStrums.add(babyArrow);
-    			// 中间滚动调整
     			if (ClientPrefs.data.middleScroll)
     			{
     				babyArrow.x += 310;
-    				if (i > 1) babyArrow.x += FlxG.width / 2 + 25;
+    				if (i > 1) // Up and Right
+    					babyArrow.x += FlxG.width / 2 + 25;
+    			}
+    			if (ClientPrefs.data.middleScroll && ClientPrefs.data.playOpponent)
+    			{
+    				babyArrow.x += FlxG.width / 2;
     			}
     		}
     		
     		strumLineNotes.add(babyArrow);
-    		
-    		opponentStrums.cameras = [camHUD];
-    		playerStrums.cameras = [camHUD];
-            strumLineNotes.cameras = [camHUD];
-            
     		babyArrow.postAddedToGroup();
     	}
     }
@@ -316,17 +336,20 @@ class OnlinePlayState extends MusicBeatState
 	{
 		super.update(elapsed);
 		
-		// 只有在游戏开始且未暂停时才更新游戏逻辑
 		if (gameStarted && !paused)
 		{
+			Conductor.songPosition += elapsed * 1000;
+			
 			if (generatedMusic)
 			{
 				if (unspawnNotes[0] != null)
 				{
-					var time:Float = 1500;
-					if (SONG.speed < 1)
-						time /= SONG.speed;
-
+					var time:Float = 2000;
+					if (songSpeed < 1)
+						time /= songSpeed;
+						
+					noteKillOffset = Math.max(Conductor.stepCrochet, 350 / songSpeed);
+					
 					while (unspawnNotes.length > 0 && unspawnNotes[0].strumTime - Conductor.songPosition < time)
 					{
 						var dunceNote:Note = unspawnNotes[0];
@@ -345,7 +368,7 @@ class OnlinePlayState extends MusicBeatState
 						strumGroup = opponentStrums;
 
 					var strum:StrumNote = strumGroup.members[daNote.noteData];
-					daNote.followStrumNote(strum, (60 / SONG.bpm) * 1000, SONG.speed);
+					daNote.followStrumNote(strum, (60 / SONG.bpm) * 1000, songSpeed);
 
 					if (daNote.mustPress)
 					{
@@ -358,15 +381,19 @@ class OnlinePlayState extends MusicBeatState
 							opponentNoteHit(daNote);
 					}
 
-					if (Conductor.songPosition > daNote.strumTime + 350)
+					if (Conductor.songPosition > daNote.strumTime + noteKillOffset)
 					{
 						if (daNote.mustPress && !daNote.wasGoodHit)
 							noteMiss(daNote);
 							
 						daNote.active = false;
 						daNote.visible = false;
-						notes.remove(daNote, true);
-						daNote.destroy();
+						
+						if (daNote.tooLate || daNote.wasGoodHit)
+						{
+							notes.remove(daNote, true);
+							daNote.destroy();
+						}
 					}
 				});
 			}
@@ -387,7 +414,6 @@ class OnlinePlayState extends MusicBeatState
 	
 	public function onKeyPress(event:KeyboardEvent):Void
 	{
-		// 只有在游戏开始且未暂停时才处理按键
 		if (!gameStarted || paused) return;
 		
 		var eventKey = event.keyCode;
