@@ -6,6 +6,7 @@ import flixel.group.FlxGroup.FlxTypedGroup;
 import flixel.util.FlxSort;
 import objects.Note;
 import objects.StrumNote;
+import objects.NoteSplash;
 import backend.Song;
 import backend.Conductor;
 import flixel.input.keyboard.FlxKey;
