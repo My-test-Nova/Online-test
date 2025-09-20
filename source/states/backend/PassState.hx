@@ -9,7 +9,7 @@ import flixel.text.FlxText;
 import flixel.FlxG;
 import flixel.util.FlxSave;
 
-import server.online.LoginClient;
+import online.server.online.LoginClient;
 
 class PassState extends FlxState {
     private var username:FlxInputText;
