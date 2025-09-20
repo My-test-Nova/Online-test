@@ -18,6 +18,9 @@ import flixel.FlxCamera;
 import flixel.system.FlxSound;
 import flixel.util.FlxTimer;
 
+import backend.Section.SwagSection;
+import backend.Song.SwagSong;
+
 import io.colyseus.Client;
 import io.colyseus.Room;
 
@@ -114,9 +117,7 @@ class OnlinePlayState extends MusicBeatState
             
             // 新增：监听开始游戏的消息
             room.onMessage("start_game", function(message) {
-                if (instance != null) {
-                    instance.startGame();
-                }
+                startGame();
             });
             
             room.onLeave += () -> {
