@@ -51,7 +51,6 @@ class OnlinePlayState extends MusicBeatState
 	public var gameStarted:Bool = false; // 等待服务器消息才开始游戏
 	
 	public var camHUD:FlxCamera;
-	public var camGame:FlxCamera;
 	
 	public static var STRUM_X = 48.5;
 	public static var STRUM_X_MIDDLESCROLL = -278;
@@ -61,7 +60,6 @@ class OnlinePlayState extends MusicBeatState
 	{
 		super();
 		
-		camGame = initPsychCamera();
 		camHUD = new FlxCamera();
 		camHUD.bgColor.alpha = 0;
 		FlxG.cameras.add(camHUD, false);
@@ -157,6 +155,9 @@ class OnlinePlayState extends MusicBeatState
 		opponentStrums = new FlxTypedGroup<StrumNote>();
 		playerStrums = new FlxTypedGroup<StrumNote>();
 		
+		add(opponentStrums);
+        add(playerStrums);
+        
 		generateSong(SONG.song);
 		
 		FlxG.stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
