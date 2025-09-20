@@ -50,11 +50,16 @@ class OnlinePlayState extends MusicBeatState
 	public var canPause:Bool = true;
 	public var gameStarted:Bool = false; // 等待服务器消息才开始游戏
 	
-	var playerNum:Int = 0;
-	
+	public var camHUD:FlxCamera;
+
 	public function new()
 	{
 		super();
+		
+		camHUD = new FlxCamera();
+		camHUD.bgColor.alpha = 0;
+		FlxG.cameras.add(camHUD, false);
+		
 		SONG = Song.loadFromJson("dad-battle");
 		connectRoom();
 	}
@@ -94,13 +99,7 @@ class OnlinePlayState extends MusicBeatState
             });
             
             room.onMessage("notice", function(message) {
-                playerNum++;
-                
-                if (playerNum >= 2) 
-                    trace("wait 5 second");
-                    FlxTimer.wait(5, () -> {
-                        room.send('start_game', 1);
-                    });
+                //trace("hhh")
             });
             
             room.onMessage("notePressed", function(message) {
@@ -115,7 +114,6 @@ class OnlinePlayState extends MusicBeatState
                 // 可以处理欢迎消息
             });
             
-            // 新增：监听开始游戏的消息
             room.onMessage("start_game", function(message) {
                 startGame();
             });
@@ -160,6 +158,8 @@ class OnlinePlayState extends MusicBeatState
 		
 		paused = true;
 		canPause = false;
+		
+		addMobileControls(false);
 	}
 	
 	public function startGame():Void
@@ -257,20 +257,50 @@ class OnlinePlayState extends MusicBeatState
 		return FlxSort.byValues(FlxSort.ASCENDING, Obj1.strumTime, Obj2.strumTime);
 	
 	private function generateStaticArrows(player:Int):Void
-	{
-		for (i in 0...SONG.mania + 1)
-		{
-			var babyArrow:StrumNote = new StrumNote(0, 0, i, player);
-			
-			if (player == 1)
-				playerStrums.add(babyArrow);
-			else
-				opponentStrums.add(babyArrow);
-			
-			strumLineNotes.add(babyArrow);
-			babyArrow.postAddedToGroup();
-		}
-	}
+    {
+    	var strumLineX:Float = ClientPrefs.data.middleScroll ? STRUM_X_MIDDLESCROLL : STRUM_X;
+    	var strumLineY:Float = ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50;
+    	
+    	for (i in 0...SONG.mania + 1)
+    	{
+    		var babyArrow:StrumNote = new StrumNote(strumLineX, strumLineY, i, player);
+    		babyArrow.downScroll = ClientPrefs.data.downScroll;
+    		
+    		// 设置初始透明度
+    		var targetAlpha:Float = 1;
+    		if (player == 0) { // 对手箭头
+    			if (!ClientPrefs.data.opponentStrums) targetAlpha = 0;
+    			else if (ClientPrefs.data.middleScroll) targetAlpha = 0.35;
+    		}
+    		babyArrow.alpha = targetAlpha;
+    
+    		if (player == 1)
+    		{
+    			playerStrums.add(babyArrow);
+    			// 中间滚动调整
+    			if (ClientPrefs.data.middleScroll)
+    			{
+    				babyArrow.x += 310;
+    				if (i > 1) babyArrow.x += FlxG.width / 2 + 25;
+    			}
+    		}
+    		else
+    		{
+    			opponentStrums.add(babyArrow);
+    			// 中间滚动调整
+    			if (ClientPrefs.data.middleScroll)
+    			{
+    				babyArrow.x += 310;
+    				if (i > 1) babyArrow.x += FlxG.width / 2 + 25;
+    			}
+    		}
+    		
+    		strumLineNotes.add(babyArrow);
+            strumLineNotes.cameras = [camHUD];
+            
+    		babyArrow.postAddedToGroup();
+    	}
+    }
 	
 	override public function update(elapsed:Float)
 	{
