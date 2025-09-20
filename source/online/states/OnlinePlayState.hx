@@ -28,11 +28,14 @@ class OnlinePlayState extends MusicBeatState
 	public var notes:FlxTypedGroup<Note>;
 	public var unspawnNotes:Array<Note> = [];
 
+    var finishTimer:FlxTimer = null;
+    
 	public var strumLineNotes:FlxTypedGroup<StrumNote>;
 	public var opponentStrums:FlxTypedGroup<StrumNote>;
 	public var playerStrums:FlxTypedGroup<StrumNote>;
 
 	public static var SONG:SwagSong = null;
+	var startingSong:Bool = true;
 
 	public var generatedMusic:Bool = false;
 	
@@ -111,7 +114,7 @@ class OnlinePlayState extends MusicBeatState
             
             room.onMessage("start_game", function(message) {
                 trace("start song");
-                startSong();
+    			startSong();
             });
             
             room.onLeave += () -> {
@@ -162,6 +165,9 @@ class OnlinePlayState extends MusicBeatState
         vocals.volume = 1;
         opponentVocals.volume = 1;
         inst.volume = 1;
+        FlxG.sound.music.onComplete = finishSong;
+        
+        startingSong = false;
     }
 
 	override public function destroy()
@@ -307,6 +313,66 @@ class OnlinePlayState extends MusicBeatState
 			spr.resetAnim = 0;
 		}
 	}
+	
+	function goodNoteHit(note:Note):Void
+	{
+		if (note.wasGoodHit)
+			return;
+
+		note.wasGoodHit = true;
+		if (ClientPrefs.data.hitsoundVolume > 0 && !note.hitsoundDisabled)
+			FlxG.sound.play(Paths.sound('hitsound'), ClientPrefs.data.hitsoundVolume);
+
+		if (note.hitCausesMiss)
+		{
+			noteMiss(note);
+			if (!note.noteSplashData.disabled && !note.isSustainNote)
+				spawnNoteSplashOnNote(note);
+
+			if (!note.isSustainNote)
+				invalidateNote(note);
+			return;
+		}
+
+		if (!note.isSustainNote)
+		{
+			combo++;
+			if (combo > 9999)
+				combo = 9999;
+			popUpScore(note);
+		}
+
+		var spr:StrumNote = playerStrums.members[note.noteData];
+		if (spr != null)
+			spr.playAnim('confirm', true);
+		vocals.volume = 1;
+
+		if (!note.isSustainNote)
+			invalidateNote(note);
+	}
+	
+	function opponentNoteHit(note:Note):Void
+	{
+		if (SONG.needsVoices && opponentVocals.length <= 0)
+			vocals.volume = 1;
+
+		var strum:StrumNote = opponentStrums.members[Std.int(Math.abs(note.noteData))];
+		if (strum != null)
+		{
+			strum.playAnim('confirm', true);
+			strum.resetAnim = Conductor.stepCrochet * 1.25 / 1000 / playbackRate;
+		}
+		note.hitByOpponent = true;
+
+		if (!note.isSustainNote)
+			invalidateNote(note);
+	}
+	
+	public function invalidateNote(note:Note):Void
+	{
+		notes.remove(note, true);
+		note.destroy();
+	}
 
 	private function generateSong(dataPath:String):Void
 	{
@@ -433,18 +499,29 @@ class OnlinePlayState extends MusicBeatState
 		}
 	}
 
-	override public function update(elapsed:Float)
+	override function update(elapsed:Float)
 	{
-	    if (inst != null && inst.playing)
-            Conductor.songPosition = inst.time;
-    
-		super.update(elapsed);
+		if (#if !android virtualPad.buttonP.justPressed
+			|| #end FlxG.keys.justPressed.ESCAPE #if android || FlxG.android.justPressed.BACK #end)
+		{
+			mobileControls.visible = false;
+			endSong();
+			super.update(elapsed);
+			return;
+		}
+
+		if (!startingSong)
+		{
+			Conductor.songPosition += elapsed * 1000 * playbackRate;
+        }
 
 		if (unspawnNotes[0] != null)
 		{
-			var time:Float = 2000;
+			var time:Float = spawnTime * playbackRate;
 			if (songSpeed < 1)
 				time /= songSpeed;
+			if (unspawnNotes[0].multSpeed < 1)
+				time /= unspawnNotes[0].multSpeed;
 
 			while (unspawnNotes.length > 0 && unspawnNotes[0].strumTime - Conductor.songPosition < time)
 			{
@@ -457,23 +534,114 @@ class OnlinePlayState extends MusicBeatState
 			}
 		}
 
-		if (generatedMusic)
+		keysCheck();
+		if (notes.length > 0)
 		{
-			if (notes.length > 0)
+			var fakeCrochet:Float = (60 / SONG.bpm) * 1000;
+			notes.forEachAlive(function(daNote:Note)
 			{
-				notes.forEachAlive(function(daNote:Note)
+				var strumGroup:FlxTypedGroup<StrumNote> = playerStrums;
+				if (!daNote.mustPress)
+					strumGroup = opponentStrums;
+
+				var strum:StrumNote = strumGroup.members[daNote.noteData];
+				daNote.followStrumNote(strum, fakeCrochet, songSpeed / playbackRate);
+
+				if (!daNote.mustPress && daNote.wasGoodHit && !daNote.hitByOpponent && !daNote.ignoreNote)
+					opponentNoteHit(daNote);
+
+				if (daNote.isSustainNote && strum.sustainReduce)
+					daNote.clipToStrumNote(strum);
+
+				// Kill extremely late notes and cause misses
+				if (Conductor.songPosition - daNote.strumTime > noteKillOffset)
 				{
-					var strumGroup:FlxTypedGroup<StrumNote> = playerStrums;
-					if (!daNote.mustPress)
-						strumGroup = opponentStrums;
+					if (daNote.mustPress && !daNote.ignoreNote && (daNote.tooLate || !daNote.wasGoodHit))
+						noteMiss(daNote);
 
-					var strum:StrumNote = strumGroup.members[daNote.noteData];
-					daNote.followStrumNote(strum, (60 / SONG.bpm) * 1000, songSpeed);
-
-					if (Conductor.songPosition - daNote.strumTime > noteKillOffset)
-						daNote.kill();
-				});
+					daNote.active = daNote.visible = false;
+					invalidateNote(daNote);
+				}
+			});
+		}
+		super.update(elapsed);
+	}
+	
+	private function keysCheck():Void
+	{
+		// HOLDING
+		var holdArray:Array<Bool> = [];
+		var pressArray:Array<Bool> = [];
+		var releaseArray:Array<Bool> = [];
+		for (key in keysArray)
+		{
+			holdArray.push(controls.pressed(key));
+			if (controls.controllerMode)
+			{
+				pressArray.push(controls.justPressed(key));
+				releaseArray.push(controls.justReleased(key));
 			}
 		}
+
+		// TO DO: Find a better way to handle controller inputs, this should work for now
+		if (controls.controllerMode && pressArray.contains(true))
+			for (i in 0...pressArray.length)
+				if (pressArray[i])
+					keyPressed(i);
+
+		// rewritten inputs???
+		if (notes.length > 0)
+		{
+			for (n in notes)
+			{ // I can't do a filter here, that's kinda awesome
+				var canHit:Bool = (n != null && n.canBeHit && n.mustPress && !n.tooLate && !n.wasGoodHit && !n.blockHit);
+
+				if (guitarHeroSustains)
+					canHit = canHit && n.parent != null && n.parent.wasGoodHit;
+
+				if (canHit && n.isSustainNote)
+				{
+					var released:Bool = !holdArray[n.noteData];
+
+					if (!released)
+						goodNoteHit(n);
+				}
+			}
+		}
+
+		// TO DO: Find a better way to handle controller inputs, this should work for now
+		if (controls.controllerMode && releaseArray.contains(true))
+			for (i in 0...releaseArray.length)
+				if (releaseArray[i])
+					keyReleased(i);
+	}
+	
+	public function finishSong():Void
+	{
+		if (ClientPrefs.data.noteOffset <= 0)
+		{
+			endSong();
+		}
+		else
+		{
+			finishTimer = new FlxTimer().start(ClientPrefs.data.noteOffset / 1000, function(tmr:FlxTimer)
+			{
+				endSong();
+			});
+		}
+	}
+
+	public function endSong()
+	{
+		vocals.pause();
+		vocals.destroy();
+		opponentVocals.pause();
+		opponentVocals.destroy();
+		if (finishTimer != null)
+		{
+			finishTimer.cancel();
+			finishTimer.destroy();
+		}
+		MusicBeatState.switchState(new states.MainMenuState());
 	}
 }
