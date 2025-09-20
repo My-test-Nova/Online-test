@@ -3,7 +3,7 @@ package online.server.online;
 import haxe.Http;
 import haxe.Json;
 
-import server.encrypt.Aes256;
+import online.server.encrypt.Aes256;
 
 class LoginClient {
     static final API_URL:String = "https://online.novaflare.top/user/login/api.php";

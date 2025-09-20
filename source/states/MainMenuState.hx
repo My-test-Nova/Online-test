@@ -324,7 +324,8 @@ class MainMenuState extends MusicBeatState
 	}
 
 	function openSub():Void{
-		openSubState(new substates.RelaxSubState());
+		//openSubState(new substates.RelaxSubState());
+		MusicBeatState.switchState(new online.states.OnlinePlayState());
 	}
 
 	var canClick:Bool = true;
