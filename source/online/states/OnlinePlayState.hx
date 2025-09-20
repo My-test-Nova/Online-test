@@ -56,7 +56,7 @@ class OnlinePlayState extends MusicBeatState
 		connectRoom();
 	}
 	
-	static function connectRoom(){
+    function connectRoom(){
         ConnectNum++;
         if (ConnectNum > 10){
             trace("重连次数过多，稍后再试");
