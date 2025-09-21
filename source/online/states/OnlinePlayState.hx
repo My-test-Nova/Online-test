@@ -324,6 +324,10 @@ class OnlinePlayState extends MusicBeatState
 	public var luaVirtualPad:FlxVirtualPad;
 
 	var diffBotplay:Bool;
+	
+	static var room:Room<Dynamic>;
+    static var isConnect:Bool = false;
+    static var ConnectNum:Int = 0;
 
 	public function new()
 	{
