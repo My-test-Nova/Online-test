@@ -896,6 +896,8 @@ class OnlinePlayState extends MusicBeatState
 		callOnScripts('onCreatePost');
 
 		cacheCountdown();
+		
+		connectRoom();
 
 		super.create();
 
