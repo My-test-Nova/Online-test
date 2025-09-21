@@ -2441,6 +2441,7 @@ class OnlinePlayState extends MusicBeatState
 		{
 			if (startedCountdown && Conductor.songPosition >= 0)
 				//startSong();
+				trace('Can Start');
 			else if (!startedCountdown)
 				Conductor.songPosition = -Conductor.crochet * 5;
 		}
