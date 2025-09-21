@@ -3637,7 +3637,7 @@ class OnlinePlayState extends MusicBeatState
 				songHits++;
 				totalPlayed++;
 				RecalculateRating(false);
-				judgementCounter_S.updateScore(daRating.name);
+				//judgementCounter_S.updateScore(daRating.name);
 			}
 		}
 
