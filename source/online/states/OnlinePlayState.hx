@@ -72,6 +72,8 @@ class OnlinePlayState extends MusicBeatState
 	public var room:Room<Dynamic>;
 	public var ConnectNum:Int = 0;
 	
+	public var camGame:FlxCamera;
+	
 	function connectRoom(){
         ConnectNum++;
         if (ConnectNum > 10){
@@ -135,6 +137,8 @@ class OnlinePlayState extends MusicBeatState
 	public function new(playbackRate:Float = 1)
 	{
 		super();
+		
+		camGame = initPsychCamera();
 		
 		connectRoom();
 		
