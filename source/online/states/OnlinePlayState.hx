@@ -120,11 +120,8 @@ class OnlinePlayState extends MusicBeatState
                 // 可以处理欢迎消息
             });
             
-            // 新增：监听开始游戏的消息
             room.onMessage("start_game", function(message) {
-                if (instance != null) {
-                    instance.startGame();
-                }
+                startGame();
             });
             
             room.onLeave += () -> {
