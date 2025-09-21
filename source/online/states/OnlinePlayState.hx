@@ -1,4 +1,4 @@
-package states;
+package online.states;
 
 import objects.StrumNote.KeybindShowcase;
 import backend.extraKeys.ExtraKeysHandler;
