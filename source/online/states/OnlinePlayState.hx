@@ -375,11 +375,11 @@ class OnlinePlayState extends MusicBeatState
             });
             
             room.onMessage("notePressed", function(message) {
-                keyPressed(message.text, -99999, false);
+                keyPressed(message.text);
             });
             
             room.onMessage("noteReleased", function(message) {
-                keyReleased(message.text, false);
+                keyReleased(message.text);
             });
             
             room.onMessage("welcome_message", function(message) {
@@ -3803,13 +3803,12 @@ class OnlinePlayState extends MusicBeatState
 		}
 	}
 
-	private function keyPressed(key:Int, ?time:Float = -999999, Http:Bool = true)
+	private function keyPressed(key:Int, ?time:Float = -999999)
 	{
 	    if (waitingForStart) return;
 	    
-	    if (Http) {
-	        room.send('notePressed', key);
-	    }
+	    room.send('notePressed', key);
+	    
 		if (ClientPrefs.data.playOpponent ? cpuControlled_opponent : cpuControlled || paused || key < 0)
 			return;
 		var char:Character = ClientPrefs.data.playOpponent ? dad : boyfriend;
@@ -3951,13 +3950,11 @@ class OnlinePlayState extends MusicBeatState
 			keyReleased(key);
 	}
 
-	public function keyReleased(key:Int, Http:Bool = true)
+	public function keyReleased(key:Int)
 	{
 	    if (waitingForStart) return;
 	    
-	    if (Http) {
-	        room.send('noteReleased', key);
-	    }
+	    room.send('noteReleased', key);
 	    
 		if (ClientPrefs.data.playOpponent ? !cpuControlled_opponent : !cpuControlled && startedCountdown && !paused)
 		{
@@ -4071,7 +4068,7 @@ class OnlinePlayState extends MusicBeatState
 		if ((controls.controllerMode || strumsBlocked.contains(true)) && releaseArray.contains(true))
 			for (i in 0...releaseArray.length)
 				if (releaseArray[i] || strumsBlocked[i] == true)
-					keyReleased(i, false);
+					keyReleased(i);
 	}
 
 	public function noteMiss(daNote:Note):Void
