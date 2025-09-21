@@ -4018,6 +4018,7 @@ class OnlinePlayState extends MusicBeatState
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
 		if (controls.controllerMode && pressArray.contains(true))
+		{
 			for (i in 0...pressArray.length)
 			{
 				if (pressArray[i] && strumsBlocked[i] != true)
