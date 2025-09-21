@@ -3799,14 +3799,17 @@ class OnlinePlayState extends MusicBeatState
 			#end
 
 			if (FlxG.keys.checkStatus(eventKey, JUST_PRESSED))
-			    room.send('notePressed', key);
-				keyPressed(key);
+				keyPressed(key, -999999, true);
 		}
 	}
 
-	private function keyPressed(key:Int, ?time:Float = -999999)
+	private function keyPressed(key:Int, ?time:Float = -999999, Http:Bool = false)
 	{
 	    if (waitingForStart) return;
+	    
+	    if (Http) {
+	        room.send('notePressed', key);
+	    }
 		if (ClientPrefs.data.playOpponent ? cpuControlled_opponent : cpuControlled || paused || key < 0)
 			return;
 		var char:Character = ClientPrefs.data.playOpponent ? dad : boyfriend;
@@ -3944,13 +3947,18 @@ class OnlinePlayState extends MusicBeatState
 		var key:Int = getKeyFromEvent(keysArray, eventKey);
 
 		if (!controls.controllerMode && key > -1)
-		    room.send('noteReleased', key);
-			keyReleased(key);
+		    
+			keyReleased(key, true);
 	}
 
-	public function keyReleased(key:Int)
+	public function keyReleased(key:Int, Http:Bool = false)
 	{
 	    if (waitingForStart) return;
+	    
+	    if (Http) {
+	        room.send('noteReleased', key);
+	    }
+	    
 		if (ClientPrefs.data.playOpponent ? !cpuControlled_opponent : !cpuControlled && startedCountdown && !paused)
 		{
 			KeyboardViewer.released(key);
@@ -4011,8 +4019,13 @@ class OnlinePlayState extends MusicBeatState
 		// TO DO: Find a better way to handle controller inputs, this should work for now
 		if (controls.controllerMode && pressArray.contains(true))
 			for (i in 0...pressArray.length)
+			{
 				if (pressArray[i] && strumsBlocked[i] != true)
-					keyPressed(i);
+				{
+					keyPressed(i, -999999, true);
+				}
+			}
+		}
 
 		var char:Character = ClientPrefs.data.playOpponent ? dad : boyfriend;
 		if (startedCountdown && !char.stunned && generatedMusic)
@@ -4057,7 +4070,7 @@ class OnlinePlayState extends MusicBeatState
 		if ((controls.controllerMode || strumsBlocked.contains(true)) && releaseArray.contains(true))
 			for (i in 0...releaseArray.length)
 				if (releaseArray[i] || strumsBlocked[i] == true)
-					keyReleased(i);
+					keyReleased(i, true);
 	}
 
 	public function noteMiss(daNote:Note):Void
