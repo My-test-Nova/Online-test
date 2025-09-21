@@ -400,7 +400,6 @@ class OnlinePlayState extends MusicBeatState
 	public function startGame():Void
 	{
 		trace("收到服务器开始游戏消息");
-		gameStarted = true;
 		paused = false;
 		canPause = true;
 		startSong();

@@ -17,6 +17,8 @@ import sys.thread.Mutex;
 import flixel.ui.FlxButton;
 import flixel.addons.transition.FlxTransitionableState;
 
+import backend.Song;
+
 class MainMenuState extends MusicBeatState
 {
 	public static var psychEngineVersion:String = '0.7.3'; // This is also used for Discord RPC
