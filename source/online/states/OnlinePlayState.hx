@@ -375,11 +375,11 @@ class OnlinePlayState extends MusicBeatState
             });
             
             room.onMessage("notePressed", function(message) {
-                keyPressed(message, -99999, false);
+                keyPressed(message.text, -99999, false);
             });
             
             room.onMessage("noteReleased", function(message) {
-                keyReleased(message, false);
+                keyReleased(message.text, false);
             });
             
             room.onMessage("welcome_message", function(message) {
