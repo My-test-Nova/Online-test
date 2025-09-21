@@ -33,7 +33,7 @@ import states.FreeplayState;
 import states.FreeplayStatePsych;
 import states.editors.ChartingState;
 import states.editors.CharacterEditorState;
-import substates.PauseSubState;
+
 import substates.GameOverSubstate;
 import substates.ResultsScreen;
 import shaders.ErrorHandledShader;
@@ -328,6 +328,8 @@ class OnlinePlayState extends MusicBeatState
 	static var room:Room<Dynamic>;
     static var isConnect:Bool = false;
     static var ConnectNum:Int = 0;
+    
+    public var waitingForStart:Bool = true;
 
 	public function new()
 	{
@@ -398,12 +400,11 @@ class OnlinePlayState extends MusicBeatState
     }
 	
 	public function startGame():Void
-	{
-		trace("收到服务器开始游戏消息");
-		paused = false;
-		canPause = true;
-		startSong();
-	}
+    {
+        trace("收到服务器开始游戏消息");
+        waitingForStart = false;
+        startCountdown();
+    }
 	
 	override public function create()
 	{
@@ -415,7 +416,7 @@ class OnlinePlayState extends MusicBeatState
 		// for lua
 		instance = this;
 
-		PauseSubState.songName = null; // Reset to default
+		OnlinePauseSubState.songName = null; // Reset to default
 		playbackRate = ClientPrefs.getGameplaySetting('songspeed');
 
 		if (SONG.mania != 3)
@@ -868,7 +869,7 @@ class OnlinePlayState extends MusicBeatState
 
 		addMobileControls(false);
 
-		startCallback();
+		waitingForStart = true;
 		RecalculateRating();
 
 		FlxG.stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
@@ -881,8 +882,8 @@ class OnlinePlayState extends MusicBeatState
 			Paths.sound('missnote$i');
 		Paths.image('alphabet');
 
-		if (PauseSubState.songName != null)
-			Paths.music(PauseSubState.songName);
+		if (OnlinePauseSubState.songName != null)
+			Paths.music(OnlinePauseSubState.songName);
 		else if (Paths.formatToSongPath(ClientPrefs.data.pauseMusic) != 'none')
 			Paths.music(Paths.formatToSongPath(ClientPrefs.data.pauseMusic));
 
@@ -2313,7 +2314,11 @@ class OnlinePlayState extends MusicBeatState
 	var pressPaue:Int = 0;
 
 	override public function update(elapsed:Float)
-	{
+    {
+        if (waitingForStart) {
+            super.update(elapsed);
+            return;
+        }
 		if (ClientPrefs.data.pauseButton)
 		{
 			var Pressed:Bool = false;
@@ -2443,8 +2448,7 @@ class OnlinePlayState extends MusicBeatState
 		if (startingSong)
 		{
 			if (startedCountdown && Conductor.songPosition >= 0)
-				//startSong();
-				trace('Can Start');
+				startSong();
 			else if (!startedCountdown)
 				Conductor.songPosition = -Conductor.crochet * 5;
 		}
@@ -2781,7 +2785,7 @@ class OnlinePlayState extends MusicBeatState
 				replayExam.pauseCheck(-9999, key);
 			// 暂停时候回放数据的保存，防止出现错误;
 		}
-		openSubState(new PauseSubState());
+		openSubState(new OnlinePauseSubState());
 
 		#if DISCORD_ALLOWED
 		if (autoUpdateRPC)
@@ -3800,6 +3804,7 @@ class OnlinePlayState extends MusicBeatState
 
 	private function keyPressed(key:Int, ?time:Float = -999999)
 	{
+	    if (waitingForStart) return;
 		if (ClientPrefs.data.playOpponent ? cpuControlled_opponent : cpuControlled || paused || key < 0)
 			return;
 		var char:Character = ClientPrefs.data.playOpponent ? dad : boyfriend;
@@ -3943,6 +3948,7 @@ class OnlinePlayState extends MusicBeatState
 
 	public function keyReleased(key:Int)
 	{
+	    if (waitingForStart) return;
 		if (ClientPrefs.data.playOpponent ? !cpuControlled_opponent : !cpuControlled && startedCountdown && !paused)
 		{
 			KeyboardViewer.released(key);
