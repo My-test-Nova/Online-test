@@ -540,12 +540,6 @@ class OnlinePlayState extends MusicBeatState
 		FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
 		FlxG.stage.removeEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
 		
-		if (virtualPad != null)
-		{
-			virtualPad.destroy();
-			virtualPad = null;
-		}
-		
 		if (pauseButton != null)
 		{
 			pauseButton.destroy();
