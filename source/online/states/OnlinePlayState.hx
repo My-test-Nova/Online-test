@@ -7,6 +7,7 @@ import flixel.util.FlxSort;
 import objects.Note;
 import objects.StrumNote;
 import backend.Song;
+import backend.Section.SwagSection;
 import backend.Conductor;
 import flixel.input.keyboard.FlxKey;
 import openfl.events.KeyboardEvent;
@@ -18,6 +19,8 @@ import flixel.FlxCamera;
 import flixel.system.FlxSound;
 import flixel.util.FlxTimer;
 import flixel.math.FlxPoint;
+
+import substates.PauseSubState;
 
 import io.colyseus.Client;
 import io.colyseus.Room;
@@ -61,7 +64,7 @@ class OnlinePlayState extends MusicBeatState
 		connectRoom();
 	}
 	
-	static function connectRoom(){
+	function connectRoom(){
         ConnectNum++;
         if (ConnectNum > 10){
             trace("重连次数过多，稍后再试");
