@@ -375,11 +375,11 @@ class OnlinePlayState extends MusicBeatState
             });
             
             room.onMessage("notePressed", function(message) {
-                keyPressed(message);
+                keyPressed(message, -99999, false);
             });
             
             room.onMessage("noteReleased", function(message) {
-                keyReleased(message);
+                keyReleased(message, false);
             });
             
             room.onMessage("welcome_message", function(message) {
@@ -3799,11 +3799,11 @@ class OnlinePlayState extends MusicBeatState
 			#end
 
 			if (FlxG.keys.checkStatus(eventKey, JUST_PRESSED))
-				keyPressed(key, -999999, true);
+				keyPressed(key);
 		}
 	}
 
-	private function keyPressed(key:Int, ?time:Float = -999999, Http:Bool = false)
+	private function keyPressed(key:Int, ?time:Float = -999999, Http:Bool = true)
 	{
 	    if (waitingForStart) return;
 	    
@@ -3948,10 +3948,10 @@ class OnlinePlayState extends MusicBeatState
 
 		if (!controls.controllerMode && key > -1)
 		    
-			keyReleased(key, true);
+			keyReleased(key);
 	}
 
-	public function keyReleased(key:Int, Http:Bool = false)
+	public function keyReleased(key:Int, Http:Bool = true)
 	{
 	    if (waitingForStart) return;
 	    
@@ -4023,7 +4023,7 @@ class OnlinePlayState extends MusicBeatState
 			{
 				if (pressArray[i] && strumsBlocked[i] != true)
 				{
-					keyPressed(i, -999999, true);
+					keyPressed(i);
 				}
 			}
 		}
@@ -4071,7 +4071,7 @@ class OnlinePlayState extends MusicBeatState
 		if ((controls.controllerMode || strumsBlocked.contains(true)) && releaseArray.contains(true))
 			for (i in 0...releaseArray.length)
 				if (releaseArray[i] || strumsBlocked[i] == true)
-					keyReleased(i, true);
+					keyReleased(i, false);
 	}
 
 	public function noteMiss(daNote:Note):Void
