@@ -325,6 +325,7 @@ class MainMenuState extends MusicBeatState
 
 	function openSub():Void{
 		//openSubState(new substates.RelaxSubState());
+		online.states.OnlinePlayState.SONG = Song.loadFromJson("dad-battle");
 		MusicBeatState.switchState(new online.states.OnlinePlayState());
 	}
 
