@@ -375,11 +375,11 @@ class OnlinePlayState extends MusicBeatState
             });
             
             room.onMessage("notePressed", function(message) {
-                keyPressed(message.text);
+                keyPressed(message.text, -999999, false);
             });
             
             room.onMessage("noteReleased", function(message) {
-                keyReleased(message.text);
+                keyReleased(message.text, false);
             });
             
             room.onMessage("welcome_message", function(message) {
@@ -3803,12 +3803,14 @@ class OnlinePlayState extends MusicBeatState
 		}
 	}
 
-	private function keyPressed(key:Int, ?time:Float = -999999)
+	private function keyPressed(key:Int, ?time:Float = -999999, ?Http:Bool = true)
 	{
 	    if (waitingForStart) return;
 	    
-	    room.send('notePressed', key);
-	    
+	    if (Http)
+	    {
+	        room.send('notePressed', key);
+	    }
 		if (ClientPrefs.data.playOpponent ? cpuControlled_opponent : cpuControlled || paused || key < 0)
 			return;
 		var char:Character = ClientPrefs.data.playOpponent ? dad : boyfriend;
@@ -3950,11 +3952,14 @@ class OnlinePlayState extends MusicBeatState
 			keyReleased(key);
 	}
 
-	public function keyReleased(key:Int)
+	public function keyReleased(key:Int, ?Http:Bool = true)
 	{
 	    if (waitingForStart) return;
 	    
-	    room.send('noteReleased', key);
+	    if (Http)
+	    {
+	        room.send('noteReleased', key);
+	    }
 	    
 		if (ClientPrefs.data.playOpponent ? !cpuControlled_opponent : !cpuControlled && startedCountdown && !paused)
 		{
