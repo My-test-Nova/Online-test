@@ -306,7 +306,7 @@ class OnlinePlayState extends MusicBeatState
 	#if LUA_ALLOWED public var luaArray:Array<FunkinLua> = []; #end
 
 	#if (LUA_ALLOWED || HSCRIPT_ALLOWED)
-	private var luaDebugGroup:FlxTypedGroup<psychlua.DebugLuaText>;
+	private var luaDebugGroup:FlxTypedGroup<DebugLuaText>;
 	#end
 
 	public var introSoundsSuffix:String = '';
