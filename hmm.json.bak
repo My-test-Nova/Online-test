@@ -156,6 +156,11 @@
       "url": "https://github.com/NovaFlare-Engine-haxelib/funkVis-FrequencyFixed"
     },
     {
+      "name": "colyseus",
+      "type": "haxelib",
+      "version": "0.15.2",
+    },
+    {
       "name": "grig.audio",
       "type": "git",
       "dir": "src",

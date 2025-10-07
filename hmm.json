@@ -158,7 +158,7 @@
     {
       "name": "colyseus",
       "type": "haxelib",
-      "version": "0.15.2",
+      "version": "0.15.2"
     },
     {
       "name": "grig.audio",
