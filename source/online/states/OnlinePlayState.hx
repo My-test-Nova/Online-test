@@ -33,7 +33,7 @@ import states.FreeplayState;
 import states.FreeplayStatePsych;
 import states.editors.ChartingState;
 import states.editors.CharacterEditorState;
-
+import substates.PauseSubState;
 import substates.GameOverSubstate;
 import substates.ResultsScreen;
 import shaders.ErrorHandledShader;
@@ -45,6 +45,7 @@ import openfl.filters.BitmapFilter;
 import objects.Note.EventNote;
 import objects.*;
 import states.stages.*;
+import states.stages.objects.*;
 #if LUA_ALLOWED
 import scripts.lua.*;
 #else
@@ -68,10 +69,10 @@ import io.colyseus.Room;
  * here's some useful tips if you are making a mod in source:
  *
  * If you want to add your stage to the game, copy states/stages/Template.hx,
- * and put your stage code there, then, on OnlinePlayState, search for
+ * and put your stage code there, then, on PlayState, search for
  * "switch (curStage)", and add your stage to that list.
  *
- * If you want to code Events, you can either code it on a Stage file or on OnlinePlayState, if you're doing the latter, search for:
+ * If you want to code Events, you can either code it on a Stage file or on PlayState, if you're doing the latter, search for:
  *
  * "function eventPushed" - Only called *one time* when the game loads, use it for precaching events that use the same assets, no matter the values
  * "function eventPushedUnique" - Called one time per event, use it for precaching events that uses different assets based on its values
@@ -106,11 +107,13 @@ class OnlinePlayState extends MusicBeatState
 	#if HSCRIPT_ALLOWED
 	public var hscriptArray:Array<HScript> = [];
 	public var instancesExclude:Array<String> = [];
+	public var hscriptGrp:HScriptPack;
 	#end
 
 	#if LUA_ALLOWED
 	public var modchartTweens:Map<String, FlxTween> = new Map<String, FlxTween>();
 	public var modchartSprites:Map<String, ModchartSprite> = new Map<String, ModchartSprite>();
+	public var checkSprites:Map<String, String> = new Map<String, String>();
 	public var modchartTimers:Map<String, FlxTimer> = new Map<String, FlxTimer>();
 	public var modchartSounds:Map<String, FlxSound> = new Map<String, FlxSound>();
 	public var modchartTexts:Map<String, FlxText> = new Map<String, FlxText>();
@@ -301,7 +304,7 @@ class OnlinePlayState extends MusicBeatState
 	var boyfriendIdled:Bool = false;
 
 	// Lua shit
-	public static var instance:OnlinePlayState;
+	public static var instance:PlayState;
 
 	#if LUA_ALLOWED public var luaArray:Array<FunkinLua> = []; #end
 
@@ -322,6 +325,11 @@ class OnlinePlayState extends MusicBeatState
 	public var luaVirtualPad:FlxVirtualPad;
 
 	var diffBotplay:Bool;
+
+	public function new()
+	{
+		super();
+	}
 	
 	static var room:Room<Dynamic>;
     static var isConnect:Bool = false;
@@ -413,8 +421,10 @@ class OnlinePlayState extends MusicBeatState
 		
 		// for lua
 		instance = this;
+		hscriptGrp = new HScriptPack();
+		hscriptArray = hscriptGrp.scriptMembers;
 
-		OnlinePauseSubState.songName = null; // Reset to default
+		PauseSubState.songName = null; // Reset to default
 		playbackRate = ClientPrefs.getGameplaySetting('songspeed');
 
 		if (SONG.mania != 3)
@@ -441,7 +451,7 @@ class OnlinePlayState extends MusicBeatState
 		if (ClientPrefs.data.playOpponent)
 			cpuControlled = ClientPrefs.data.botOpponentFix;
 
-		replayExam = new Replay(OnlinePlayState);
+		replayExam = new Replay(PlayState);
 		if (!replayMode)
 			replayExam.reset();
 		else
@@ -559,8 +569,8 @@ class OnlinePlayState extends MusicBeatState
 				new PhillyBlazin(); // Weekend 1 - Blazin
 			case _: //custom class
 				if(Reflect.hasField(stageData, "specifyClass") && stageData.specifyClass != null) {
-					if(psychlua.scriptClasses.ScriptedBaseStage.__sc_scriptClassLists().contains(stageData.specifyClass)) {
-						psychlua.scriptClasses.ScriptedBaseStage.createScriptClassInstance(stageData.specifyClass);
+					if(scripts.scriptClasses.ScriptedBaseStage.__sc_scriptClassLists().contains(stageData.specifyClass)) {
+						scripts.scriptClasses.ScriptedBaseStage.createScriptClassInstance(stageData.specifyClass);
 					} else {
 						var resolve:Dynamic = Type.resolveClass(stageData.specifyClass);
 						if(resolve != null) Type.createInstance(cast resolve, []);
@@ -589,7 +599,7 @@ class OnlinePlayState extends MusicBeatState
 		}
 
 		#if (LUA_ALLOWED || HSCRIPT_ALLOWED)
-		luaDebugGroup = new FlxTypedGroup<psychlua.DebugLuaText>();
+		luaDebugGroup = new FlxTypedGroup<DebugLuaText>();
 		luaDebugGroup.cameras = [camOther];
 		add(luaDebugGroup);
 		#end
@@ -767,7 +777,7 @@ class OnlinePlayState extends MusicBeatState
 
 		if (ClientPrefs.data.pauseButton)
 		{
-			pauseButton_menu = new FlxSprite(2, 2).loadGraphic(Paths.image('menuExtend/OnlinePlayState/pauseButton'));
+			pauseButton_menu = new FlxSprite(2, 2).loadGraphic(Paths.image('menuExtend/PlayState/pauseButton'));
 			pauseButton_menu.setGraphicSize(100, 100);
 			pauseButton_menu.alpha = 0.5;
 			pauseButton_menu.visible = false;
@@ -864,10 +874,12 @@ class OnlinePlayState extends MusicBeatState
 				#end
 			}
 		#end
+		hscriptGrp.execute();
+		hscriptGrp.call("onCreate");
 
 		addMobileControls(false);
 
-		waitingForStart = true;
+		startCallback();
 		RecalculateRating();
 
 		FlxG.stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
@@ -880,8 +892,8 @@ class OnlinePlayState extends MusicBeatState
 			Paths.sound('missnote$i');
 		Paths.image('alphabet');
 
-		if (OnlinePauseSubState.songName != null)
-			Paths.music(OnlinePauseSubState.songName);
+		if (PauseSubState.songName != null)
+			Paths.music(PauseSubState.songName);
 		else if (Paths.formatToSongPath(ClientPrefs.data.pauseMusic) != 'none')
 			Paths.music(Paths.formatToSongPath(ClientPrefs.data.pauseMusic));
 
@@ -894,8 +906,6 @@ class OnlinePlayState extends MusicBeatState
 		callOnScripts('onCreatePost');
 
 		cacheCountdown();
-		
-		connectRoom();
 
 		super.create();
 
@@ -957,7 +967,7 @@ class OnlinePlayState extends MusicBeatState
 	public function addTextToDebug(text:String, color:FlxColor)
 	{
 		if (!ClientPrefs.data.developerMode) return;
-		var newText:psychlua.DebugLuaText = luaDebugGroup.recycle(psychlua.DebugLuaText);
+		var newText:DebugLuaText = luaDebugGroup.recycle(DebugLuaText);
 		newText.text = text;
 		#if android
 		newText.text = StringTools.replace(text, "/storage/emulated/0/.NovaFlare Engine/", ""); // delete stupid path
@@ -967,7 +977,7 @@ class OnlinePlayState extends MusicBeatState
 		newText.alpha = 1;
 		newText.setPosition(10, 8 - newText.height);
 
-		luaDebugGroup.forEachAlive(function(spr:psychlua.DebugLuaText)
+		luaDebugGroup.forEachAlive(function(spr:DebugLuaText)
 		{
 			spr.y += newText.height + 2;
 		});
@@ -1087,7 +1097,7 @@ class OnlinePlayState extends MusicBeatState
 
 		if (doPush)
 		{
-			if (Iris.instances.exists(scriptFile))
+			if (HScript.instances.exists(scriptFile))
 				doPush = false;
 
 			if (doPush)
@@ -1148,7 +1158,7 @@ class OnlinePlayState extends MusicBeatState
 			{
 				function onVideoEnd()
 				{
-					if (generatedMusic && OnlinePlayState.SONG.notes[Std.int(curStep / 16)] != null && !endingSong && !isCameraOnForcedPos)
+					if (generatedMusic && PlayState.SONG.notes[Std.int(curStep / 16)] != null && !endingSong && !isCameraOnForcedPos)
 					{
 						moveCameraSection();
 						FlxG.camera.snapToTarget();
@@ -1397,7 +1407,7 @@ class OnlinePlayState extends MusicBeatState
 		spr.scrollFactor.set();
 		spr.updateHitbox();
 
-		if (OnlinePlayState.isPixelStage)
+		if (PlayState.isPixelStage)
 			spr.setGraphicSize(Std.int(spr.width * daPixelZoom));
 
 		spr.screenCenter();
@@ -1646,7 +1656,7 @@ class OnlinePlayState extends MusicBeatState
 	private function generateSong(dataPath:String):Void
 	{
 		// FlxG.log.add(ChartParser.parse());
-		songSpeed = OnlinePlayState.SONG.speed;
+		songSpeed = PlayState.SONG.speed;
 		songSpeedType = ClientPrefs.getGameplaySetting('scrolltype');
 		switch (songSpeedType)
 		{
@@ -1781,7 +1791,7 @@ class OnlinePlayState extends MusicBeatState
 						swagNote.tail.push(sustainNote);
 
 						sustainNote.correctionOffset = swagNote.height / 2;
-						if (!OnlinePlayState.isPixelStage)
+						if (!PlayState.isPixelStage)
 						{
 							if (oldNote.isSustainNote)
 							{
@@ -2037,7 +2047,7 @@ class OnlinePlayState extends MusicBeatState
 	{
 		var strumLineX:Float = ClientPrefs.data.middleScroll ? STRUM_X_MIDDLESCROLL : STRUM_X;
 		var strumLineY:Float = ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50;
-		for (i in 0...OnlinePlayState.SONG.mania + 1)
+		for (i in 0...PlayState.SONG.mania + 1)
 		{
 			// FlxG.log.add(i);
 			var targetAlpha:Float = 1;
@@ -2314,11 +2324,7 @@ class OnlinePlayState extends MusicBeatState
 	var pressPaue:Int = 0;
 
 	override public function update(elapsed:Float)
-    {
-        if (waitingForStart) {
-            super.update(elapsed);
-            return;
-        }
+	{
 		if (ClientPrefs.data.pauseButton)
 		{
 			var Pressed:Bool = false;
@@ -2512,7 +2518,6 @@ class OnlinePlayState extends MusicBeatState
 
 				var index:Int = unspawnNotes.indexOf(dunceNote);
 				unspawnNotes.splice(index, 1);
-				// dunceNote.updateHitbox();
 			}
 		}
 
@@ -2692,11 +2697,11 @@ class OnlinePlayState extends MusicBeatState
 	// Health icon updaters
 	public dynamic function updateIconsScale(elapsed:Float)
 	{
-		var mult:Float = FlxMath.lerp(1, iconP1.scale.x, FlxMath.bound((1 - (elapsed * 9 * playbackRate)) / 1.1, 0, 1));
+		var mult:Float = FlxMath.lerp(1, iconP1.scale.x, FlxMath.bound((1 - (elapsed * 13 * playbackRate)), 0, 1));
 		iconP1.scale.set(mult, mult);
 		iconP1.updateHitbox();
 
-		var mult:Float = FlxMath.lerp(1, iconP2.scale.x, FlxMath.bound((1 - (elapsed * 9 * playbackRate)) / 1.1, 0, 1));
+		var mult:Float = FlxMath.lerp(1, iconP2.scale.x, FlxMath.bound((1 - (elapsed * 13 * playbackRate)), 0, 1));
 		iconP2.scale.set(mult, mult);
 		iconP2.updateHitbox();
 	}
@@ -2785,7 +2790,7 @@ class OnlinePlayState extends MusicBeatState
 				replayExam.pauseCheck(-9999, key);
 			// 暂停时候回放数据的保存，防止出现错误;
 		}
-		openSubState(new OnlinePauseSubState());
+		openSubState(new PauseSubState());
 
 		#if DISCORD_ALLOWED
 		if (autoUpdateRPC)
@@ -3405,16 +3410,16 @@ class OnlinePlayState extends MusicBeatState
 					var difficulty:String = Difficulty.getFilePath();
 
 					trace('LOADING NEXT SONG');
-					trace(Paths.formatToSongPath(OnlinePlayState.storyPlaylist[0]) + difficulty);
+					trace(Paths.formatToSongPath(PlayState.storyPlaylist[0]) + difficulty);
 
 					FlxTransitionableState.skipNextTransIn = true;
 					FlxTransitionableState.skipNextTransOut = true;
 					prevCamFollow = camFollow;
 
-					OnlinePlayState.SONG = Song.loadFromJson(OnlinePlayState.storyPlaylist[0] + difficulty, OnlinePlayState.storyPlaylist[0]);
+					PlayState.SONG = Song.loadFromJson(PlayState.storyPlaylist[0] + difficulty, PlayState.storyPlaylist[0]);
 					FlxG.sound.music.stop();
 					LoadingState.prepareToSong();
-					LoadingState.loadAndSwitchState(new OnlinePlayState());
+					LoadingState.loadAndSwitchState(new PlayState());
 				}
 			}
 			else
@@ -3496,7 +3501,7 @@ class OnlinePlayState extends MusicBeatState
 		if (stageUI != "normal")
 		{
 			uiPrefix = '${stageUI}UI/';
-			if (OnlinePlayState.isPixelStage)
+			if (PlayState.isPixelStage)
 				uiSuffix = '-pixel';
 		}
 
@@ -3525,7 +3530,7 @@ class OnlinePlayState extends MusicBeatState
 		if (stageUI != "normal")
 		{
 			uiPrefix = '${stageUI}UI/';
-			if (OnlinePlayState.isPixelStage)
+			if (PlayState.isPixelStage)
 				uiSuffix = '-pixel';
 			antialias = !isPixelStage;
 		}
@@ -3539,7 +3544,7 @@ class OnlinePlayState extends MusicBeatState
 		rateSpr_S.y -= 60;
 		rateSpr_S.x += ClientPrefs.data.comboOffset[0];
 		rateSpr_S.y -= ClientPrefs.data.comboOffset[1];
-		if (!OnlinePlayState.isPixelStage)
+		if (!PlayState.isPixelStage)
 		{
 			rateSpr_S.setGraphicSize(Std.int(rateSpr_S.width * 0.7));
 		}
@@ -3635,7 +3640,7 @@ class OnlinePlayState extends MusicBeatState
 				songHits++;
 				totalPlayed++;
 				RecalculateRating(false);
-				//judgementCounter_S.updateScore(daRating.name);
+				judgementCounter_S.updateScore(daRating.name);
 			}
 		}
 
@@ -3651,7 +3656,7 @@ class OnlinePlayState extends MusicBeatState
 		if (stageUI != "normal")
 		{
 			uiPrefix = '${stageUI}UI/';
-			if (OnlinePlayState.isPixelStage)
+			if (PlayState.isPixelStage)
 				uiSuffix = '-pixel';
 			antialias = !isPixelStage;
 		}
@@ -3666,7 +3671,7 @@ class OnlinePlayState extends MusicBeatState
 
 		var scale:Float = 0;
 		var numScale:Float = 0;
-		if (!OnlinePlayState.isPixelStage)
+		if (!PlayState.isPixelStage)
 		{
 			rateSpr_S.setGraphicSize(Std.int(rateSpr_S.width * 0.7));
 			comboSpr_S.setGraphicSize(Std.int(comboSpr_S.width * 0.6));
@@ -3710,7 +3715,7 @@ class OnlinePlayState extends MusicBeatState
 			else
 				numScore.color = FlxColor.WHITE;
 
-			if (!OnlinePlayState.isPixelStage)
+			if (!PlayState.isPixelStage)
 				numScore.setGraphicSize(Std.int(numScore.width * 0.5));
 			else
 				numScore.setGraphicSize(Std.int(numScore.width * daPixelZoom));
@@ -3801,7 +3806,7 @@ class OnlinePlayState extends MusicBeatState
 		}
 	}
 
-	private function keyPressed(key:Int, ?time:Float = -999999, ?Http:Bool = true)
+    private function keyPressed(key:Int, ?time:Float = -999999, ?Http:Bool = true)
 	{
 	    if (waitingForStart) return;
 	    
@@ -3946,7 +3951,6 @@ class OnlinePlayState extends MusicBeatState
 		var key:Int = getKeyFromEvent(keysArray, eventKey);
 
 		if (!controls.controllerMode && key > -1)
-		    
 			keyReleased(key);
 	}
 
@@ -3958,7 +3962,6 @@ class OnlinePlayState extends MusicBeatState
 	    {
 	        room.send('noteReleased', key);
 	    }
-	    
 		if (ClientPrefs.data.playOpponent ? !cpuControlled_opponent : !cpuControlled && startedCountdown && !paused)
 		{
 			KeyboardViewer.released(key);
@@ -4018,15 +4021,9 @@ class OnlinePlayState extends MusicBeatState
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
 		if (controls.controllerMode && pressArray.contains(true))
-		{
 			for (i in 0...pressArray.length)
-			{
 				if (pressArray[i] && strumsBlocked[i] != true)
-				{
 					keyPressed(i);
-				}
-			}
-		}
 
 		var char:Character = ClientPrefs.data.playOpponent ? dad : boyfriend;
 		if (startedCountdown && !char.stunned && generatedMusic)
@@ -4214,7 +4211,7 @@ class OnlinePlayState extends MusicBeatState
 
 	// OVERRIDE THIS IN HXSCRIPT OR SMTH
 	// you can use it to handle extra animations like this
-	// OnlinePlayState.instance.singAnimation = function (data:Int) {
+	// PlayState.instance.singAnimation = function (data:Int) {
 	// 	return 'sing' + ['LEFT', 'DOWN', 'UP', 'RIGHT', 'FRONT', 'LEFT2', 'DOWN2', 'UP2', 'RIGHT2'][data];
 	// }
 	//上面的注释是PsychEK写的
@@ -4617,15 +4614,7 @@ class OnlinePlayState extends MusicBeatState
 		#end
 
 		#if HSCRIPT_ALLOWED
-		for (script in hscriptArray)
-			if (script != null)
-			{
-				script.call('onDestroy');
-				script.destroy();
-			}
-
-		while (hscriptArray.length > 0)
-			hscriptArray.pop();
+		hscriptGrp.destroy(true);
 		#end
 
 		FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
@@ -4802,10 +4791,8 @@ class OnlinePlayState extends MusicBeatState
 	public function initHScript(file:String)
 	{
 		var newScript:HScript = new HScript(file, this);
-		newScript.execute();
-		newScript.call('onCreate');
 		trace('initialized hscript interp successfully: $file');
-		hscriptArray.push(newScript);
+		hscriptGrp.add(newScript);
 	}
 	#end
 
