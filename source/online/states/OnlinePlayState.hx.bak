@@ -45,14 +45,16 @@ import openfl.filters.BitmapFilter;
 import objects.Note.EventNote;
 import objects.*;
 import states.stages.*;
+import states.stages.objects.*;
 #if LUA_ALLOWED
-import scripts.lua.*;
+import psychlua.*;
 #else
-import scripts.lua.LuaUtils;
+import psychlua.LuaUtils;
+import psychlua.HScript;
 #end
 #if HSCRIPT_ALLOWED
-import scripts.hscript.HScript;
-import scripts.hscript.HScriptPack;
+import psychlua.HScript.HScriptInfos;
+import crowplexus.iris.Iris;
 import crowplexus.hscript.Expr.Error as IrisError;
 import crowplexus.hscript.Printer;
 #end
