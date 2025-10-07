@@ -69,10 +69,10 @@ import io.colyseus.Room;
  * here's some useful tips if you are making a mod in source:
  *
  * If you want to add your stage to the game, copy states/stages/Template.hx,
- * and put your stage code there, then, on PlayState, search for
+ * and put your stage code there, then, on OnlinePlayState, search for
  * "switch (curStage)", and add your stage to that list.
  *
- * If you want to code Events, you can either code it on a Stage file or on PlayState, if you're doing the latter, search for:
+ * If you want to code Events, you can either code it on a Stage file or on OnlinePlayState, if you're doing the latter, search for:
  *
  * "function eventPushed" - Only called *one time* when the game loads, use it for precaching events that use the same assets, no matter the values
  * "function eventPushedUnique" - Called one time per event, use it for precaching events that uses different assets based on its values
@@ -304,7 +304,7 @@ class OnlinePlayState extends MusicBeatState
 	var boyfriendIdled:Bool = false;
 
 	// Lua shit
-	public static var instance:PlayState;
+	public static var instance:OnlinePlayState;
 
 	#if LUA_ALLOWED public var luaArray:Array<FunkinLua> = []; #end
 
@@ -335,6 +335,7 @@ class OnlinePlayState extends MusicBeatState
 	public function new()
 	{
 		super();
+		SONG = Song.loadFromJson();
 	}
 	
 	function connectRoom(){
@@ -446,7 +447,7 @@ class OnlinePlayState extends MusicBeatState
 		if (ClientPrefs.data.playOpponent)
 			cpuControlled = ClientPrefs.data.botOpponentFix;
 
-		replayExam = new Replay(PlayState);
+		replayExam = new Replay(OnlinePlayState);
 		if (!replayMode)
 			replayExam.reset();
 		else
@@ -772,7 +773,7 @@ class OnlinePlayState extends MusicBeatState
 
 		if (ClientPrefs.data.pauseButton)
 		{
-			pauseButton_menu = new FlxSprite(2, 2).loadGraphic(Paths.image('menuExtend/PlayState/pauseButton'));
+			pauseButton_menu = new FlxSprite(2, 2).loadGraphic(Paths.image('menuExtend/OnlinePlayState/pauseButton'));
 			pauseButton_menu.setGraphicSize(100, 100);
 			pauseButton_menu.alpha = 0.5;
 			pauseButton_menu.visible = false;
@@ -1153,7 +1154,7 @@ class OnlinePlayState extends MusicBeatState
 			{
 				function onVideoEnd()
 				{
-					if (generatedMusic && PlayState.SONG.notes[Std.int(curStep / 16)] != null && !endingSong && !isCameraOnForcedPos)
+					if (generatedMusic && OnlinePlayState.SONG.notes[Std.int(curStep / 16)] != null && !endingSong && !isCameraOnForcedPos)
 					{
 						moveCameraSection();
 						FlxG.camera.snapToTarget();
@@ -1402,7 +1403,7 @@ class OnlinePlayState extends MusicBeatState
 		spr.scrollFactor.set();
 		spr.updateHitbox();
 
-		if (PlayState.isPixelStage)
+		if (OnlinePlayState.isPixelStage)
 			spr.setGraphicSize(Std.int(spr.width * daPixelZoom));
 
 		spr.screenCenter();
@@ -1651,7 +1652,7 @@ class OnlinePlayState extends MusicBeatState
 	private function generateSong(dataPath:String):Void
 	{
 		// FlxG.log.add(ChartParser.parse());
-		songSpeed = PlayState.SONG.speed;
+		songSpeed = OnlinePlayState.SONG.speed;
 		songSpeedType = ClientPrefs.getGameplaySetting('scrolltype');
 		switch (songSpeedType)
 		{
@@ -1786,7 +1787,7 @@ class OnlinePlayState extends MusicBeatState
 						swagNote.tail.push(sustainNote);
 
 						sustainNote.correctionOffset = swagNote.height / 2;
-						if (!PlayState.isPixelStage)
+						if (!OnlinePlayState.isPixelStage)
 						{
 							if (oldNote.isSustainNote)
 							{
@@ -2042,7 +2043,7 @@ class OnlinePlayState extends MusicBeatState
 	{
 		var strumLineX:Float = ClientPrefs.data.middleScroll ? STRUM_X_MIDDLESCROLL : STRUM_X;
 		var strumLineY:Float = ClientPrefs.data.downScroll ? (FlxG.height - 150) : 50;
-		for (i in 0...PlayState.SONG.mania + 1)
+		for (i in 0...OnlinePlayState.SONG.mania + 1)
 		{
 			// FlxG.log.add(i);
 			var targetAlpha:Float = 1;
@@ -3405,16 +3406,16 @@ class OnlinePlayState extends MusicBeatState
 					var difficulty:String = Difficulty.getFilePath();
 
 					trace('LOADING NEXT SONG');
-					trace(Paths.formatToSongPath(PlayState.storyPlaylist[0]) + difficulty);
+					trace(Paths.formatToSongPath(OnlinePlayState.storyPlaylist[0]) + difficulty);
 
 					FlxTransitionableState.skipNextTransIn = true;
 					FlxTransitionableState.skipNextTransOut = true;
 					prevCamFollow = camFollow;
 
-					PlayState.SONG = Song.loadFromJson(PlayState.storyPlaylist[0] + difficulty, PlayState.storyPlaylist[0]);
+					OnlinePlayState.SONG = Song.loadFromJson(OnlinePlayState.storyPlaylist[0] + difficulty, OnlinePlayState.storyPlaylist[0]);
 					FlxG.sound.music.stop();
 					LoadingState.prepareToSong();
-					LoadingState.loadAndSwitchState(new PlayState());
+					LoadingState.loadAndSwitchState(new OnlinePlayState());
 				}
 			}
 			else
@@ -3496,7 +3497,7 @@ class OnlinePlayState extends MusicBeatState
 		if (stageUI != "normal")
 		{
 			uiPrefix = '${stageUI}UI/';
-			if (PlayState.isPixelStage)
+			if (OnlinePlayState.isPixelStage)
 				uiSuffix = '-pixel';
 		}
 
@@ -3525,7 +3526,7 @@ class OnlinePlayState extends MusicBeatState
 		if (stageUI != "normal")
 		{
 			uiPrefix = '${stageUI}UI/';
-			if (PlayState.isPixelStage)
+			if (OnlinePlayState.isPixelStage)
 				uiSuffix = '-pixel';
 			antialias = !isPixelStage;
 		}
@@ -3539,7 +3540,7 @@ class OnlinePlayState extends MusicBeatState
 		rateSpr_S.y -= 60;
 		rateSpr_S.x += ClientPrefs.data.comboOffset[0];
 		rateSpr_S.y -= ClientPrefs.data.comboOffset[1];
-		if (!PlayState.isPixelStage)
+		if (!OnlinePlayState.isPixelStage)
 		{
 			rateSpr_S.setGraphicSize(Std.int(rateSpr_S.width * 0.7));
 		}
@@ -3651,7 +3652,7 @@ class OnlinePlayState extends MusicBeatState
 		if (stageUI != "normal")
 		{
 			uiPrefix = '${stageUI}UI/';
-			if (PlayState.isPixelStage)
+			if (OnlinePlayState.isPixelStage)
 				uiSuffix = '-pixel';
 			antialias = !isPixelStage;
 		}
@@ -3666,7 +3667,7 @@ class OnlinePlayState extends MusicBeatState
 
 		var scale:Float = 0;
 		var numScale:Float = 0;
-		if (!PlayState.isPixelStage)
+		if (!OnlinePlayState.isPixelStage)
 		{
 			rateSpr_S.setGraphicSize(Std.int(rateSpr_S.width * 0.7));
 			comboSpr_S.setGraphicSize(Std.int(comboSpr_S.width * 0.6));
@@ -3710,7 +3711,7 @@ class OnlinePlayState extends MusicBeatState
 			else
 				numScore.color = FlxColor.WHITE;
 
-			if (!PlayState.isPixelStage)
+			if (!OnlinePlayState.isPixelStage)
 				numScore.setGraphicSize(Std.int(numScore.width * 0.5));
 			else
 				numScore.setGraphicSize(Std.int(numScore.width * daPixelZoom));
@@ -4206,7 +4207,7 @@ class OnlinePlayState extends MusicBeatState
 
 	// OVERRIDE THIS IN HXSCRIPT OR SMTH
 	// you can use it to handle extra animations like this
-	// PlayState.instance.singAnimation = function (data:Int) {
+	// OnlinePlayState.instance.singAnimation = function (data:Int) {
 	// 	return 'sing' + ['LEFT', 'DOWN', 'UP', 'RIGHT', 'FRONT', 'LEFT2', 'DOWN2', 'UP2', 'RIGHT2'][data];
 	// }
 	//上面的注释是PsychEK写的

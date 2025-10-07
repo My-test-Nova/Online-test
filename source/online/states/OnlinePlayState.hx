@@ -335,6 +335,7 @@ class OnlinePlayState extends MusicBeatState
 	public function new()
 	{
 		super();
+		SONG = Song.loadFromJson("dad-battle");
 	}
 	
 	function connectRoom(){
